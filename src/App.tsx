@@ -338,40 +338,10 @@ const BlackjackTrainer = () => {
     return 0;
   };
 
-  // Инициализация игры
-  const initializeGame = () => {
-    const shoe = createDeck();
-    const cutPosition = Math.floor(shoe.length - gameSettings.cutCards * 52);
-    const playableShoe = shoe.slice(0, cutPosition);
-
-    setGameState((prev) => ({
-      ...prev,
-      shoe: playableShoe,
-      dealtCards: [],
-      currentRound: 0,
-      totalRounds: Math.floor(
-        playableShoe.length / (gameSettings.positions + 1) / 2
-      ),
-      playerCount: 0,
-      actualCount: 0,
-      gameStarted: true,
-      roundActive: false,
-      showCountInput: false,
-      playerInput: "",
-      hands: [],
-      dealerHand: [],
-    }));
-  };
-
-  // Раздача карт
-  const dealRound = () => {
-    if (gameState.shoe.length < (gameSettings.positions + 1) * 2) {
-      setGameState((prev) => ({ ...prev, notice: "Колода закончилась!" }));
-      return;
-    }
-
-    let newShoe = [...gameState.shoe];
-    let dealtCards = [...gameState.dealtCards];
+  // Раздача карт одного раунда (чистая функция, без обращения к state)
+  const buildRoundDeal = (shoe: PlayingCard[], dealtCardsSoFar: PlayingCard[]) => {
+    let newShoe = [...shoe];
+    let dealtCards = [...dealtCardsSoFar];
     let hands: PlayingCard[][] = [];
     let dealerHand: PlayingCard[] = [];
 
@@ -405,6 +375,62 @@ const BlackjackTrainer = () => {
     dealerHand.push(dealerSecondCard);
     dealtCards.push(dealerSecondCard);
 
+    return { newShoe, dealtCards, hands, dealerHand, dealerFirstCard };
+  };
+
+  // Открыть обе карты дилера через 2 секунды и запросить счёт
+  const revealDealer = (dealerHand: PlayingCard[]) => {
+    setTimeout(() => {
+      setGameState((prev) => ({
+        ...prev,
+        dealerHand,
+        roundActive: false,
+        showCountInput: true,
+      }));
+    }, 2000);
+  };
+
+  // Инициализация игры — сразу сдаёт первый раунд
+  const initializeGame = () => {
+    const shoe = createDeck();
+    const cutPosition = Math.floor(shoe.length - gameSettings.cutCards * 52);
+    const playableShoe = shoe.slice(0, cutPosition);
+    const totalRounds = Math.floor(
+      playableShoe.length / (gameSettings.positions + 1) / 2
+    );
+
+    const { newShoe, dealtCards, hands, dealerHand, dealerFirstCard } =
+      buildRoundDeal(playableShoe, []);
+
+    setGameState((prev) => ({
+      ...prev,
+      shoe: newShoe,
+      dealtCards,
+      currentRound: 1,
+      totalRounds,
+      playerCount: 0,
+      actualCount: 0,
+      gameStarted: true,
+      roundActive: true,
+      showCountInput: false,
+      playerInput: "",
+      hands,
+      dealerHand: [dealerFirstCard],
+    }));
+
+    revealDealer(dealerHand);
+  };
+
+  // Раздача следующего раунда
+  const dealRound = () => {
+    if (gameState.shoe.length < (gameSettings.positions + 1) * 2) {
+      setGameState((prev) => ({ ...prev, notice: "Колода закончилась!" }));
+      return;
+    }
+
+    const { newShoe, dealtCards, hands, dealerHand, dealerFirstCard } =
+      buildRoundDeal(gameState.shoe, gameState.dealtCards);
+
     setGameState((prev) => ({
       ...prev,
       shoe: newShoe,
@@ -415,15 +441,7 @@ const BlackjackTrainer = () => {
       currentRound: prev.currentRound + 1,
     }));
 
-    // Автоматически показать все карты через 2 секунды
-    setTimeout(() => {
-      setGameState((prev) => ({
-        ...prev,
-        dealerHand: dealerHand, // Показываем обе карты дилера
-        roundActive: false,
-        showCountInput: true,
-      }));
-    }, 2000);
+    revealDealer(dealerHand);
   };
 
   // Подсчет актуального счета
