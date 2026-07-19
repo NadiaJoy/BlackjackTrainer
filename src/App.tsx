@@ -33,11 +33,23 @@ interface GameSettings {
   activePositions: number[];
   autoAdvance: boolean;
   dealerHitsSoft17: boolean;
+  maxSplitHands: number;
 }
 
-type HandStatus = "pending" | "playing" | "stood" | "bust" | "blackjack";
+type HandStatus = "playing" | "stood" | "bust" | "blackjack";
 
 type RoundPhase = "idle" | "player-turn" | "dealer-turn" | "counting" | "result";
+
+interface PlayerHand {
+  cards: PlayingCard[];
+  status: HandStatus;
+  doubled: boolean;
+}
+
+interface HandLocation {
+  box: number;
+  hand: number;
+}
 
 interface GameState {
   shoe: PlayingCard[];
@@ -48,12 +60,11 @@ interface GameState {
   gameStarted: boolean;
   phase: RoundPhase;
   activeBoxIndex: number | null;
+  activeHandIndex: number | null;
   playerInput: string;
   score: { correct: number; total: number };
   showSettings: boolean;
-  hands: PlayingCard[][];
-  handStatus: HandStatus[];
-  doubled: boolean[];
+  hands: PlayerHand[][];
   dealerHand: PlayingCard[];
   dealerHoleHidden: boolean;
   notice: string | null;
@@ -279,6 +290,32 @@ const SettingsPanel = ({
                 : "Дилер останавливается на 17, включая мягкое (по умолчанию)."}
             </p>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Максимум рук после сплита:
+            </label>
+            <select
+              value={draft.maxSplitHands}
+              onChange={(e) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  maxSplitHands: parseInt(e.target.value),
+                }))
+              }
+              className="w-full border rounded px-3 py-2"
+            >
+              <option value={2}>2 руки (пересплит запрещён)</option>
+              <option value={3}>3 руки</option>
+              <option value={4}>4 руки (по умолчанию)</option>
+              <option value={99}>Без ограничений</option>
+            </select>
+            <p className="text-sm text-gray-500 mt-1">
+              Пара внутри бокса даёт «Сплит»: рука делится на две, каждая
+              получает свою карту. Если в одной из новых рук снова пара — её
+              тоже можно сплитовать, пока не будет достигнут лимит.
+            </p>
+          </div>
         </div>
 
         <div className="flex space-x-4 mt-6">
@@ -309,6 +346,7 @@ const BlackjackTrainer = () => {
     activePositions: [1, 2, 3],
     autoAdvance: true,
     dealerHitsSoft17: false,
+    maxSplitHands: 4,
   });
 
   const [gameState, setGameState] = useState<GameState>({
@@ -320,12 +358,11 @@ const BlackjackTrainer = () => {
     gameStarted: false,
     phase: "idle",
     activeBoxIndex: null,
+    activeHandIndex: null,
     playerInput: "",
     score: { correct: 0, total: 0 },
     showSettings: false,
     hands: [],
-    handStatus: [],
-    doubled: [],
     dealerHand: [],
     dealerHoleHidden: true,
     notice: null,
@@ -425,6 +462,11 @@ const BlackjackTrainer = () => {
   const isNaturalBlackjack = (hand: PlayingCard[]): boolean =>
     hand.length === 2 && getHandValue(hand) === 21;
 
+  const canSplitHand = (hand: PlayerHand, handsInBox: number): boolean =>
+    hand.cards.length === 2 &&
+    hand.cards[0].rank === hand.cards[1].rank &&
+    handsInBox < gameSettings.maxSplitHands;
+
   // Минимум карт, нужный для раздачи ещё одного раунда
   const minCardsForRound = () => (gameSettings.activePositions.length + 1) * 2;
 
@@ -432,20 +474,18 @@ const BlackjackTrainer = () => {
   const buildRoundDeal = (shoe: PlayingCard[], dealtCardsSoFar: PlayingCard[]) => {
     let newShoe = [...shoe];
     let dealtCards = [...dealtCardsSoFar];
-    let hands: PlayingCard[][] = [];
-    let handStatus: HandStatus[] = [];
+    let hands: PlayerHand[][] = [];
     let dealerHand: PlayingCard[] = [];
+    let firstCards: (PlayingCard | null)[] = [];
 
     // Раздача первой карты каждому игроку
     for (let i = 0; i < gameSettings.positions; i++) {
       if (gameSettings.activePositions.includes(i + 1)) {
         const card = newShoe.pop()!;
-        hands.push([card]);
+        firstCards.push(card);
         dealtCards.push(card);
-        handStatus.push("playing");
       } else {
-        hands.push([]);
-        handStatus.push("pending");
+        firstCards.push(null);
       }
     }
 
@@ -454,13 +494,18 @@ const BlackjackTrainer = () => {
     dealerHand.push(dealerFirstCard);
     dealtCards.push(dealerFirstCard);
 
-    // Вторая карта каждому игроку
+    // Вторая карта каждому игроку — собираем итоговую руку бокса
     for (let i = 0; i < gameSettings.positions; i++) {
-      if (gameSettings.activePositions.includes(i + 1) && hands[i].length > 0) {
-        const card = newShoe.pop()!;
-        hands[i].push(card);
-        dealtCards.push(card);
+      const first = firstCards[i];
+      if (first === null) {
+        hands.push([]);
+        continue;
       }
+      const card = newShoe.pop()!;
+      dealtCards.push(card);
+      const cards = [first, card];
+      const status: HandStatus = isNaturalBlackjack(cards) ? "blackjack" : "playing";
+      hands.push([{ cards, status, doubled: false }]);
     }
 
     // Закрытая карта дилера (не показываем, пока не сыграют все боксы)
@@ -468,31 +513,30 @@ const BlackjackTrainer = () => {
     dealerHand.push(dealerSecondCard);
     dealtCards.push(dealerSecondCard);
 
-    // Натуральный блэкджек сразу завершает решение по боксу
-    handStatus = handStatus.map((status, i) =>
-      status === "playing" && isNaturalBlackjack(hands[i]) ? "blackjack" : status
-    );
-
-    const doubled = new Array(gameSettings.positions).fill(false);
-
-    return { newShoe, dealtCards, hands, handStatus, doubled, dealerHand };
+    return { newShoe, dealtCards, hands, dealerHand };
   };
 
-  const findNextPlayingBox = (
-    handStatus: HandStatus[],
-    fromIndex: number = 0
-  ): number | null => {
-    for (let i = fromIndex; i < handStatus.length; i++) {
-      if (handStatus[i] === "playing") return i;
+  // Найти следующую руку в статусе "playing", сначала в пределах текущего
+  // бокса (пересплит), затем в следующих боксах
+  const findNextPlayingHand = (
+    hands: PlayerHand[][],
+    fromBox: number,
+    fromHand: number
+  ): HandLocation | null => {
+    for (let b = fromBox; b < hands.length; b++) {
+      const startHand = b === fromBox ? fromHand : 0;
+      for (let h = startHand; h < hands[b].length; h++) {
+        if (hands[b][h].status === "playing") return { box: b, hand: h };
+      }
     }
     return null;
   };
 
-  // Раздать карты и определить, с какого бокса начинать (или сразу к дилеру)
+  // Раздать карты и определить, с какой руки начинать (или сразу к дилеру)
   const prepareRound = (shoe: PlayingCard[], dealtCardsSoFar: PlayingCard[]) => {
     const deal = buildRoundDeal(shoe, dealtCardsSoFar);
-    const firstBox = findNextPlayingBox(deal.handStatus);
-    return { ...deal, firstBox };
+    const firstLocation = findNextPlayingHand(deal.hands, 0, 0);
+    return { ...deal, firstLocation };
   };
 
   // Ход дилера: открыть закрытую карту и добирать по правилам до конца
@@ -505,6 +549,7 @@ const BlackjackTrainer = () => {
       ...prev,
       phase: "dealer-turn",
       activeBoxIndex: null,
+      activeHandIndex: null,
       dealerHoleHidden: false,
     }));
 
@@ -553,8 +598,10 @@ const BlackjackTrainer = () => {
     const cutPosition = Math.floor(shoe.length - gameSettings.cutCards * 52);
     const playableShoe = shoe.slice(0, cutPosition);
 
-    const { newShoe, dealtCards, hands, handStatus, doubled, dealerHand, firstBox } =
-      prepareRound(playableShoe, []);
+    const { newShoe, dealtCards, hands, dealerHand, firstLocation } = prepareRound(
+      playableShoe,
+      []
+    );
 
     setGameState((prev) => ({
       ...prev,
@@ -564,18 +611,17 @@ const BlackjackTrainer = () => {
       playerCount: 0,
       actualCount: 0,
       gameStarted: true,
-      phase: firstBox !== null ? "player-turn" : "dealer-turn",
-      activeBoxIndex: firstBox,
+      phase: firstLocation !== null ? "player-turn" : "dealer-turn",
+      activeBoxIndex: firstLocation?.box ?? null,
+      activeHandIndex: firstLocation?.hand ?? null,
       playerInput: "",
       hands,
-      handStatus,
-      doubled,
       dealerHand,
       dealerHoleHidden: true,
       score: { correct: 0, total: 0 },
     }));
 
-    if (firstBox === null) {
+    if (firstLocation === null) {
       runDealerTurn(newShoe, dealtCards, dealerHand);
     }
   };
@@ -594,124 +640,174 @@ const BlackjackTrainer = () => {
       return;
     }
 
-    const { newShoe, dealtCards, hands, handStatus, doubled, dealerHand, firstBox } =
-      prepareRound(gameState.shoe, gameState.dealtCards);
+    const { newShoe, dealtCards, hands, dealerHand, firstLocation } = prepareRound(
+      gameState.shoe,
+      gameState.dealtCards
+    );
 
     setGameState((prev) => ({
       ...prev,
       shoe: newShoe,
       dealtCards,
       hands,
-      handStatus,
-      doubled,
       dealerHand,
       dealerHoleHidden: true,
-      phase: firstBox !== null ? "player-turn" : "dealer-turn",
-      activeBoxIndex: firstBox,
+      phase: firstLocation !== null ? "player-turn" : "dealer-turn",
+      activeBoxIndex: firstLocation?.box ?? null,
+      activeHandIndex: firstLocation?.hand ?? null,
       playerInput: "",
       currentRound: prev.currentRound + 1,
     }));
 
-    if (firstBox === null) {
+    if (firstLocation === null) {
       runDealerTurn(newShoe, dealtCards, dealerHand);
     }
   };
 
-  // Передать ход следующему играющему боксу либо дилеру
+  // Передать ход следующей играющей руке либо дилеру
   const advanceTurn = (
-    handStatus: HandStatus[],
+    hands: PlayerHand[][],
     shoe: PlayingCard[],
     dealtCards: PlayingCard[],
     dealerHand: PlayingCard[],
-    fromIndex: number
+    fromBox: number,
+    fromHand: number
   ) => {
-    const nextBox = findNextPlayingBox(handStatus, fromIndex);
-    if (nextBox !== null) {
-      setGameState((prev) => ({ ...prev, activeBoxIndex: nextBox }));
+    const next = findNextPlayingHand(hands, fromBox, fromHand);
+    if (next !== null) {
+      setGameState((prev) => ({
+        ...prev,
+        activeBoxIndex: next.box,
+        activeHandIndex: next.hand,
+      }));
     } else {
       runDealerTurn(shoe, dealtCards, dealerHand);
     }
   };
 
-  // Игрок берёт карту в текущий бокс
+  // Игрок берёт карту в текущую руку
   const hit = () => {
-    const idx = gameState.activeBoxIndex;
-    if (idx === null || gameState.shoe.length === 0) return;
+    const box = gameState.activeBoxIndex;
+    const handIdx = gameState.activeHandIndex;
+    if (box === null || handIdx === null || gameState.shoe.length === 0) return;
 
     const newShoe = [...gameState.shoe];
     const card = newShoe.pop()!;
-    const newHand = [...gameState.hands[idx], card];
+    const hand = gameState.hands[box][handIdx];
+    const newCards = [...hand.cards, card];
     const newDealtCards = [...gameState.dealtCards, card];
-    const { value } = getHandInfo(newHand);
+    const { value } = getHandInfo(newCards);
+    const newStatus: HandStatus =
+      value > 21 ? "bust" : value === 21 ? "stood" : "playing";
 
-    const newHands = [...gameState.hands];
-    newHands[idx] = newHand;
-
-    const newHandStatus = [...gameState.handStatus];
-    newHandStatus[idx] = value > 21 ? "bust" : value === 21 ? "stood" : "playing";
+    const newHands = gameState.hands.map((boxHands) => [...boxHands]);
+    newHands[box][handIdx] = { ...hand, cards: newCards, status: newStatus };
 
     setGameState((prev) => ({
       ...prev,
       shoe: newShoe,
       dealtCards: newDealtCards,
       hands: newHands,
-      handStatus: newHandStatus,
     }));
 
-    if (newHandStatus[idx] !== "playing") {
-      advanceTurn(newHandStatus, newShoe, newDealtCards, gameState.dealerHand, idx + 1);
+    if (newStatus !== "playing") {
+      advanceTurn(newHands, newShoe, newDealtCards, gameState.dealerHand, box, handIdx + 1);
     }
   };
 
-  // Игрок останавливается с текущим боксом
+  // Игрок останавливается с текущей рукой
   const stand = () => {
-    const idx = gameState.activeBoxIndex;
-    if (idx === null) return;
+    const box = gameState.activeBoxIndex;
+    const handIdx = gameState.activeHandIndex;
+    if (box === null || handIdx === null) return;
 
-    const newHandStatus = [...gameState.handStatus];
-    newHandStatus[idx] = "stood";
+    const newHands = gameState.hands.map((boxHands) => [...boxHands]);
+    newHands[box][handIdx] = { ...newHands[box][handIdx], status: "stood" };
 
-    setGameState((prev) => ({ ...prev, handStatus: newHandStatus }));
+    setGameState((prev) => ({ ...prev, hands: newHands }));
     advanceTurn(
-      newHandStatus,
+      newHands,
       gameState.shoe,
       gameState.dealtCards,
       gameState.dealerHand,
-      idx + 1
+      box,
+      handIdx + 1
     );
   };
 
   // Игрок удваивает ставку: одна карта и автоматический стоп
   const double = () => {
-    const idx = gameState.activeBoxIndex;
-    if (idx === null || gameState.hands[idx].length !== 2) return;
-    if (gameState.shoe.length === 0) return;
+    const box = gameState.activeBoxIndex;
+    const handIdx = gameState.activeHandIndex;
+    if (box === null || handIdx === null) return;
+    const hand = gameState.hands[box][handIdx];
+    if (hand.cards.length !== 2 || gameState.shoe.length === 0) return;
 
     const newShoe = [...gameState.shoe];
     const card = newShoe.pop()!;
-    const newHand = [...gameState.hands[idx], card];
+    const newCards = [...hand.cards, card];
     const newDealtCards = [...gameState.dealtCards, card];
-    const { value } = getHandInfo(newHand);
+    const { value } = getHandInfo(newCards);
 
-    const newHands = [...gameState.hands];
-    newHands[idx] = newHand;
-
-    const newHandStatus = [...gameState.handStatus];
-    newHandStatus[idx] = value > 21 ? "bust" : "stood";
-
-    const newDoubled = [...gameState.doubled];
-    newDoubled[idx] = true;
+    const newHands = gameState.hands.map((boxHands) => [...boxHands]);
+    newHands[box][handIdx] = {
+      cards: newCards,
+      status: value > 21 ? "bust" : "stood",
+      doubled: true,
+    };
 
     setGameState((prev) => ({
       ...prev,
       shoe: newShoe,
       dealtCards: newDealtCards,
       hands: newHands,
-      handStatus: newHandStatus,
-      doubled: newDoubled,
     }));
 
-    advanceTurn(newHandStatus, newShoe, newDealtCards, gameState.dealerHand, idx + 1);
+    advanceTurn(newHands, newShoe, newDealtCards, gameState.dealerHand, box, handIdx + 1);
+  };
+
+  // Игрок делает сплит: пара делится на две руки, каждая получает по карте.
+  // Если после сплита в одной из новых рук снова пара — её можно сплитовать
+  // ещё раз, вплоть до gameSettings.maxSplitHands рук в боксе.
+  const split = () => {
+    const box = gameState.activeBoxIndex;
+    const handIdx = gameState.activeHandIndex;
+    if (box === null || handIdx === null) return;
+
+    const boxHands = gameState.hands[box];
+    const hand = boxHands[handIdx];
+    if (!canSplitHand(hand, boxHands.length) || gameState.shoe.length < 2) return;
+
+    const newShoe = [...gameState.shoe];
+    const cardA = newShoe.pop()!;
+    const cardB = newShoe.pop()!;
+    const newDealtCards = [...gameState.dealtCards, cardA, cardB];
+
+    const makeSplitHand = (originalCard: PlayingCard, newCard: PlayingCard): PlayerHand => {
+      const cards = [originalCard, newCard];
+      // 21 после сплита — не натуральный блэкджек, просто стоп
+      const status: HandStatus = getHandValue(cards) === 21 ? "stood" : "playing";
+      return { cards, status, doubled: false };
+    };
+
+    const handA = makeSplitHand(hand.cards[0], cardA);
+    const handB = makeSplitHand(hand.cards[1], cardB);
+
+    const newBoxHands = [...boxHands];
+    newBoxHands.splice(handIdx, 1, handA, handB);
+
+    const newHands = gameState.hands.map((h, i) => (i === box ? newBoxHands : [...h]));
+
+    setGameState((prev) => ({
+      ...prev,
+      shoe: newShoe,
+      dealtCards: newDealtCards,
+      hands: newHands,
+    }));
+
+    if (handA.status !== "playing") {
+      advanceTurn(newHands, newShoe, newDealtCards, gameState.dealerHand, box, handIdx + 1);
+    }
   };
 
   // Подсчет актуального счета
@@ -758,7 +854,6 @@ const BlackjackTrainer = () => {
   };
 
   const handStatusLabel: Record<HandStatus, string | null> = {
-    pending: null,
     playing: null,
     stood: "Стоп",
     bust: "Перебор",
@@ -856,67 +951,82 @@ const BlackjackTrainer = () => {
               {/* Игроки */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 {gameState.hands.map(
-                  (hand, idx) =>
-                    gameSettings.activePositions.includes(idx + 1) && (
-                      <div
-                        key={idx}
-                        className={`bg-green-600 rounded-lg p-3 ${
-                          gameState.phase === "player-turn" &&
-                          gameState.activeBoxIndex === idx
-                            ? "ring-4 ring-yellow-400"
-                            : ""
-                        }`}
-                      >
-                        <h4 className="font-bold mb-2">
-                          Бокс {idx + 1}
-                          {gameState.doubled[idx] && (
-                            <span className="text-xs font-normal ml-1">
-                              (х2)
-                            </span>
-                          )}
-                        </h4>
-                        <div className="flex space-x-1 mb-2">
-                          {hand.map((card, cardIdx) => (
-                            <Card key={cardIdx} card={card} />
-                          ))}
+                  (boxHands, boxIdx) =>
+                    gameSettings.activePositions.includes(boxIdx + 1) && (
+                      <div key={boxIdx} className="bg-green-600 rounded-lg p-3">
+                        <h4 className="font-bold mb-2">Бокс {boxIdx + 1}</h4>
+                        <div className="space-y-2">
+                          {boxHands.map((hand, handIdx) => {
+                            const isActive =
+                              gameState.phase === "player-turn" &&
+                              gameState.activeBoxIndex === boxIdx &&
+                              gameState.activeHandIndex === handIdx;
+
+                            return (
+                              <div
+                                key={handIdx}
+                                className={`rounded-lg p-2 ${
+                                  isActive ? "ring-4 ring-yellow-400" : ""
+                                } ${boxHands.length > 1 ? "bg-green-700" : ""}`}
+                              >
+                                {boxHands.length > 1 && (
+                                  <div className="text-xs font-semibold mb-1">
+                                    Рука {handIdx + 1}
+                                  </div>
+                                )}
+                                <div className="flex space-x-1 mb-1">
+                                  {hand.cards.map((card, cardIdx) => (
+                                    <Card key={cardIdx} card={card} />
+                                  ))}
+                                </div>
+                                <div className="text-sm mb-1">
+                                  Сумма: {getHandValue(hand.cards)}
+                                  {hand.doubled && " (х2)"}
+                                </div>
+                                {handStatusLabel[hand.status] && (
+                                  <div className="text-sm font-bold mb-1">
+                                    {handStatusLabel[hand.status]}
+                                  </div>
+                                )}
+                                {isActive && (
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    <button
+                                      onClick={hit}
+                                      disabled={gameState.shoe.length === 0}
+                                      className="bg-blue-500 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600 disabled:opacity-50"
+                                    >
+                                      Взять
+                                    </button>
+                                    <button
+                                      onClick={stand}
+                                      className="bg-gray-500 text-white px-3 py-1.5 rounded text-sm hover:bg-gray-600"
+                                    >
+                                      Стоп
+                                    </button>
+                                    {hand.cards.length === 2 && (
+                                      <button
+                                        onClick={double}
+                                        disabled={gameState.shoe.length === 0}
+                                        className="bg-purple-500 text-white px-3 py-1.5 rounded text-sm hover:bg-purple-600 disabled:opacity-50"
+                                      >
+                                        Х2
+                                      </button>
+                                    )}
+                                    {canSplitHand(hand, boxHands.length) &&
+                                      gameState.shoe.length >= 2 && (
+                                        <button
+                                          onClick={split}
+                                          className="bg-orange-500 text-white px-3 py-1.5 rounded text-sm hover:bg-orange-600"
+                                        >
+                                          Сплит
+                                        </button>
+                                      )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
-                        {hand.length > 0 && (
-                          <div className="text-sm mb-1">
-                            Сумма: {getHandValue(hand)}
-                          </div>
-                        )}
-                        {handStatusLabel[gameState.handStatus[idx]] && (
-                          <div className="text-sm font-bold mb-1">
-                            {handStatusLabel[gameState.handStatus[idx]]}
-                          </div>
-                        )}
-                        {gameState.phase === "player-turn" &&
-                          gameState.activeBoxIndex === idx && (
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              <button
-                                onClick={hit}
-                                disabled={gameState.shoe.length === 0}
-                                className="bg-blue-500 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600 disabled:opacity-50"
-                              >
-                                Взять
-                              </button>
-                              <button
-                                onClick={stand}
-                                className="bg-gray-500 text-white px-3 py-1.5 rounded text-sm hover:bg-gray-600"
-                              >
-                                Стоп
-                              </button>
-                              {hand.length === 2 && (
-                                <button
-                                  onClick={double}
-                                  disabled={gameState.shoe.length === 0}
-                                  className="bg-purple-500 text-white px-3 py-1.5 rounded text-sm hover:bg-purple-600 disabled:opacity-50"
-                                >
-                                  Х2
-                                </button>
-                              )}
-                            </div>
-                          )}
                       </div>
                     )
                 )}
