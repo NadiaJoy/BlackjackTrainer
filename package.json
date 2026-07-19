@@ -1,8 +1,8 @@
 {
-  "name": "bj-trainer",
+  "name": "blackjack-trainer",
   "private": true,
   "version": "1.0.0",
-  "description": "BJ Trainer — тренажёр счёта карт для блэкджека",
+  "description": "Blackjack Trainer — тренажёр счёта карт для блэкджека",
   "type": "module",
   "scripts": {
     "dev": "vite",
