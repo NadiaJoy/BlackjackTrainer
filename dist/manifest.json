@@ -1,0 +1,15 @@
+{
+  "short_name": "Блэкджек Тренер",
+  "name": "Блэкджек Тренер — тренировка счёта карт",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#166534",
+  "background_color": "#166534"
+}
