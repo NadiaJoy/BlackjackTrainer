@@ -1,5 +1,18 @@
-import { useState, useCallback } from "react";
-import { Settings, Play, RotateCcw, History as HistoryIcon } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import {
+  Settings,
+  Play,
+  RotateCcw,
+  History as HistoryIcon,
+  HelpCircle,
+} from "lucide-react";
+import {
+  type Language,
+  type Strings,
+  STRINGS,
+  loadLanguage,
+  saveLanguage,
+} from "./i18n";
 
 type Suit = "♠" | "♥" | "♦" | "♣";
 type Rank =
@@ -65,6 +78,7 @@ interface GameState {
   score: { correct: number; total: number };
   showSettings: boolean;
   showHistory: boolean;
+  showHelp: boolean;
   hands: PlayerHand[][];
   dealerHand: PlayingCard[];
   dealerHoleHidden: boolean;
@@ -134,9 +148,9 @@ const saveHistory = (history: SessionRecord[]) => {
   }
 };
 
-const formatSessionDate = (iso: string): string => {
+const formatSessionDate = (iso: string, language: Language): string => {
   try {
-    return new Date(iso).toLocaleString("ru-RU", {
+    return new Date(iso).toLocaleString(language === "ru" ? "ru-RU" : "en-US", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -178,9 +192,11 @@ const Card = ({
 
 const NoticeModal = ({
   message,
+  okLabel,
   onClose,
 }: {
   message: string;
+  okLabel: string;
   onClose: () => void;
 }) => (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -190,13 +206,14 @@ const NoticeModal = ({
         onClick={onClose}
         className="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600"
       >
-        Ок
+        {okLabel}
       </button>
     </div>
   </div>
 );
 
 interface SettingsPanelProps {
+  t: Strings;
   initialSettings: GameSettings;
   gameStarted: boolean;
   onApply: (settings: GameSettings) => void;
@@ -204,6 +221,7 @@ interface SettingsPanelProps {
 }
 
 const SettingsPanel = ({
+  t,
   initialSettings,
   gameStarted,
   onApply,
@@ -214,19 +232,16 @@ const SettingsPanel = ({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 text-gray-900">
-        <h3 className="text-xl font-bold mb-4">Настройки игры</h3>
+        <h3 className="text-xl font-bold mb-4">{t.settingsTitle}</h3>
 
         {gameStarted && (
-          <p className="text-sm text-gray-500 mb-4">
-            Число колод, глубина среза и система счёта фиксируются на время
-            игры — доступны только для новой игры.
-          </p>
+          <p className="text-sm text-gray-500 mb-4">{t.settingsLockedNotice}</p>
         )}
 
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-2">
-              Количество колод:
+              {t.numDecksLabel}
             </label>
             <select
               value={draft.numDecks}
@@ -239,14 +254,14 @@ const SettingsPanel = ({
               }
               className="w-full border rounded px-3 py-2 disabled:bg-gray-100 disabled:text-gray-400"
             >
-              <option value={6}>6 колод</option>
-              <option value={8}>8 колод</option>
+              <option value={6}>{t.deckOption6}</option>
+              <option value={8}>{t.deckOption8}</option>
             </select>
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-2">
-              Срезанные колоды:
+              {t.cutCardsLabel}
             </label>
             <select
               value={draft.cutCards}
@@ -259,17 +274,17 @@ const SettingsPanel = ({
               }
               className="w-full border rounded px-3 py-2 disabled:bg-gray-100 disabled:text-gray-400"
             >
-              <option value={1.5}>1.5 колоды</option>
-              <option value={2}>2 колоды</option>
-              <option value={3}>3 колоды</option>
-              <option value={4}>4 колоды</option>
-              <option value={5}>5 колод</option>
+              <option value={1.5}>{t.cutOption1_5}</option>
+              <option value={2}>{t.cutOption2}</option>
+              <option value={3}>{t.cutOption3}</option>
+              <option value={4}>{t.cutOption4}</option>
+              <option value={5}>{t.cutOption5}</option>
             </select>
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-2">
-              Система счета:
+              {t.countingSystemLabel}
             </label>
             <select
               value={draft.countingSystem}
@@ -282,14 +297,14 @@ const SettingsPanel = ({
               }
               className="w-full border rounded px-3 py-2 disabled:bg-gray-100 disabled:text-gray-400"
             >
-              <option value="high-low">High-Low (+1, 0, -1)</option>
-              <option value="omega-2">Omega II (+2, +1, 0, -1, -2)</option>
+              <option value="high-low">{t.highLowOptionLabel}</option>
+              <option value="omega-2">{t.omegaOptionLabel}</option>
             </select>
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-2">
-              Позиции игроков:
+              {t.positionsLabel}
             </label>
             <div className="grid grid-cols-3 gap-2">
               {[1, 2, 3, 4, 5, 6].map((pos) => (
@@ -316,7 +331,9 @@ const SettingsPanel = ({
                       }
                     }}
                   />
-                  <span>Бокс {pos}</span>
+                  <span>
+                    {t.boxLabel} {pos}
+                  </span>
                 </label>
               ))}
             </div>
@@ -334,15 +351,10 @@ const SettingsPanel = ({
                   }))
                 }
               />
-              <span className="text-sm font-medium">
-                Автоматически переходить к следующему раунду
-              </span>
+              <span className="text-sm font-medium">{t.autoAdvanceLabel}</span>
             </label>
             {!draft.autoAdvance && (
-              <p className="text-sm text-gray-500 mt-1">
-                После проверки счёта нужно будет нажимать «Следующий раунд»
-                самостоятельно.
-              </p>
+              <p className="text-sm text-gray-500 mt-1">{t.autoAdvanceHint}</p>
             )}
           </div>
 
@@ -358,20 +370,16 @@ const SettingsPanel = ({
                   }))
                 }
               />
-              <span className="text-sm font-medium">
-                Дилер добирает карту на мягком 17 (H17)
-              </span>
+              <span className="text-sm font-medium">{t.dealerH17Label}</span>
             </label>
             <p className="text-sm text-gray-500 mt-1">
-              {draft.dealerHitsSoft17
-                ? "Дилер берёт ещё карту при мягком 17 (например, туз + 6)."
-                : "Дилер останавливается на 17, включая мягкое (по умолчанию)."}
+              {draft.dealerHitsSoft17 ? t.dealerH17HintOn : t.dealerH17HintOff}
             </p>
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-2">
-              Максимум рук после сплита:
+              {t.maxSplitLabel}
             </label>
             <select
               value={draft.maxSplitHands}
@@ -383,16 +391,12 @@ const SettingsPanel = ({
               }
               className="w-full border rounded px-3 py-2"
             >
-              <option value={2}>2 руки (пересплит запрещён)</option>
-              <option value={3}>3 руки</option>
-              <option value={4}>4 руки (по умолчанию)</option>
-              <option value={99}>Без ограничений</option>
+              <option value={2}>{t.maxSplitOption2}</option>
+              <option value={3}>{t.maxSplitOption3}</option>
+              <option value={4}>{t.maxSplitOption4}</option>
+              <option value={99}>{t.maxSplitOptionUnlimited}</option>
             </select>
-            <p className="text-sm text-gray-500 mt-1">
-              Пара внутри бокса даёт «Сплит»: рука делится на две, каждая
-              получает свою карту. Если в одной из новых рук снова пара — её
-              тоже можно сплитовать, пока не будет достигнут лимит.
-            </p>
+            <p className="text-sm text-gray-500 mt-1">{t.maxSplitHint}</p>
           </div>
         </div>
 
@@ -401,13 +405,13 @@ const SettingsPanel = ({
             onClick={onCancel}
             className="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
           >
-            Отмена
+            {t.cancel}
           </button>
           <button
             onClick={() => onApply(draft)}
             className="flex-1 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
           >
-            Применить
+            {t.apply}
           </button>
         </div>
       </div>
@@ -416,12 +420,20 @@ const SettingsPanel = ({
 };
 
 interface HistoryPanelProps {
+  t: Strings;
+  language: Language;
   history: SessionRecord[];
   onClear: () => void;
   onClose: () => void;
 }
 
-const HistoryPanel = ({ history, onClear, onClose }: HistoryPanelProps) => {
+const HistoryPanel = ({
+  t,
+  language,
+  history,
+  onClear,
+  onClose,
+}: HistoryPanelProps) => {
   const [confirmingClear, setConfirmingClear] = useState(false);
 
   const totals = history.reduce(
@@ -434,18 +446,15 @@ const HistoryPanel = ({ history, onClear, onClose }: HistoryPanelProps) => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 text-gray-900 max-h-[85vh] flex flex-col">
-        <h3 className="text-xl font-bold mb-4">История сессий</h3>
+        <h3 className="text-xl font-bold mb-4">{t.historyTitle}</h3>
 
         {history.length === 0 ? (
-          <p className="text-sm text-gray-500 mb-4">
-            Пока нет завершённых колод. Доиграйте колоду до конца или нажмите
-            «Новая игра» во время игры — появится первая запись.
-          </p>
+          <p className="text-sm text-gray-500 mb-4">{t.historyEmpty}</p>
         ) : (
           <>
             <p className="text-sm text-gray-500 mb-3">
-              Средняя точность за всё время: {overallAccuracy}% ({history.length}{" "}
-              {history.length === 1 ? "колода" : "колод"})
+              {t.historyAllTimeAccuracyPrefix} {overallAccuracy}% ({history.length}{" "}
+              {history.length === 1 ? t.shoeSingular : t.shoePlural})
             </p>
             <div className="overflow-y-auto flex-1 space-y-2 mb-4">
               {history.map((record, idx) => (
@@ -455,11 +464,12 @@ const HistoryPanel = ({ history, onClear, onClose }: HistoryPanelProps) => {
                 >
                   <div>
                     <div className="font-medium">
-                      {formatSessionDate(record.date)}
+                      {formatSessionDate(record.date, language)}
                     </div>
                     <div className="text-gray-500">
                       {record.countingSystem.toUpperCase()} · {record.numDecks}{" "}
-                      колод · {record.rounds} раунд(ов)
+                      {record.numDecks === 1 ? t.shoeSingular : t.shoePlural} ·{" "}
+                      {record.rounds} {t.roundsSuffix}
                     </div>
                   </div>
                   <div className="text-lg font-bold whitespace-nowrap">
@@ -478,7 +488,7 @@ const HistoryPanel = ({ history, onClear, onClose }: HistoryPanelProps) => {
                 onClick={() => setConfirmingClear(false)}
                 className="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
               >
-                Отмена
+                {t.cancel}
               </button>
               <button
                 onClick={() => {
@@ -487,7 +497,7 @@ const HistoryPanel = ({ history, onClear, onClose }: HistoryPanelProps) => {
                 }}
                 className="flex-1 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
               >
-                Точно очистить
+                {t.confirmClearBtn}
               </button>
             </>
           ) : (
@@ -496,14 +506,14 @@ const HistoryPanel = ({ history, onClear, onClose }: HistoryPanelProps) => {
                 onClick={onClose}
                 className="flex-1 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
               >
-                Закрыть
+                {t.close}
               </button>
               {history.length > 0 && (
                 <button
                   onClick={() => setConfirmingClear(true)}
                   className="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
                 >
-                  Очистить историю
+                  {t.clearHistory}
                 </button>
               )}
             </>
@@ -514,7 +524,48 @@ const HistoryPanel = ({ history, onClear, onClose }: HistoryPanelProps) => {
   );
 };
 
+const HelpPanel = ({ t, onClose }: { t: Strings; onClose: () => void }) => (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 text-gray-900 max-h-[85vh] flex flex-col">
+      <h3 className="text-xl font-bold mb-4">{t.helpTitle}</h3>
+      <div className="overflow-y-auto flex-1 space-y-4 mb-4">
+        {t.helpSections.map((section, idx) => (
+          <div key={idx}>
+            <h4 className="font-bold mb-1">{section.title}</h4>
+            <p className="text-sm text-gray-700">{section.body}</p>
+          </div>
+        ))}
+      </div>
+      <button
+        onClick={onClose}
+        className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+      >
+        {t.close}
+      </button>
+    </div>
+  </div>
+);
+
+const langButtonClass = (active: boolean) =>
+  `px-3 py-1 rounded text-sm font-semibold ${
+    active
+      ? "bg-white text-green-800"
+      : "bg-green-700 text-green-200 hover:bg-green-600"
+  }`;
+
 const BlackjackTrainer = () => {
+  const [language, setLanguage] = useState<Language>(loadLanguage);
+  const t = STRINGS[language];
+
+  const switchLanguage = (next: Language) => {
+    setLanguage(next);
+    saveLanguage(next);
+  };
+
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
+
   const [gameSettings, setGameSettings] = useState<GameSettings>(loadSettings);
   const [history, setHistory] = useState<SessionRecord[]>(loadHistory);
 
@@ -532,6 +583,7 @@ const BlackjackTrainer = () => {
     score: { correct: 0, total: 0 },
     showSettings: false,
     showHistory: false,
+    showHelp: false,
     hands: [],
     dealerHand: [],
     dealerHoleHidden: true,
@@ -826,7 +878,7 @@ const BlackjackTrainer = () => {
       recordSession(gameState.currentRound, gameState.score);
       setGameState((prev) => ({
         ...prev,
-        notice: `Колода закончилась! Точность за игру: ${accuracy}%`,
+        notice: `${t.deckEmptyPrefix} ${accuracy}%`,
       }));
       return;
     }
@@ -1038,7 +1090,7 @@ const BlackjackTrainer = () => {
         recordSession(roundsPlayed, finalScore);
         setGameState((prev) => ({
           ...prev,
-          notice: `Колода закончилась! Точность за игру: ${accuracy}%`,
+          notice: `${t.deckEmptyPrefix} ${accuracy}%`,
         }));
       } else if (gameSettings.autoAdvance) {
         dealRound();
@@ -1048,9 +1100,9 @@ const BlackjackTrainer = () => {
 
   const handStatusLabel: Record<HandStatus, string | null> = {
     playing: null,
-    stood: "Стоп",
-    bust: "Перебор",
-    blackjack: "Блэкджек!",
+    stood: t.statusStood,
+    bust: t.statusBust,
+    blackjack: t.statusBlackjack,
   };
 
   return (
@@ -1059,14 +1111,28 @@ const BlackjackTrainer = () => {
         {/* Заголовок */}
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold mb-2">Blackjack Trainer</h1>
-          <p className="text-green-200">Тренировка счета карт</p>
+          <p className="text-green-200 mb-3">{t.appSubtitle}</p>
+          <div className="flex justify-center gap-2">
+            <button
+              onClick={() => switchLanguage("ru")}
+              className={langButtonClass(language === "ru")}
+            >
+              RU
+            </button>
+            <button
+              onClick={() => switchLanguage("en")}
+              className={langButtonClass(language === "en")}
+            >
+              EN
+            </button>
+          </div>
         </div>
 
         {/* Статистика */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-green-700 rounded-lg p-3 text-center">
             <div className="text-xl font-bold">{gameState.currentRound}</div>
-            <div className="text-xs">Раунд</div>
+            <div className="text-xs">{t.statRound}</div>
           </div>
           <div className="bg-green-700 rounded-lg p-3 text-center">
             <div className="text-xl font-bold">
@@ -1077,17 +1143,17 @@ const BlackjackTrainer = () => {
                 : 0}
               %
             </div>
-            <div className="text-xs">Точность</div>
+            <div className="text-xs">{t.statAccuracy}</div>
           </div>
           <div className="bg-green-700 rounded-lg p-3 text-center">
             <div className="text-xl font-bold">{gameState.shoe.length}</div>
-            <div className="text-xs">Карт осталось</div>
+            <div className="text-xs">{t.statCardsLeft}</div>
           </div>
           <div className="bg-green-700 rounded-lg p-3 text-center">
             <div className="text-xl font-bold">
               {gameSettings.countingSystem.toUpperCase()}
             </div>
-            <div className="text-xs">Система</div>
+            <div className="text-xs">{t.statSystem}</div>
           </div>
         </div>
 
@@ -1095,12 +1161,8 @@ const BlackjackTrainer = () => {
         <div className="bg-green-700 rounded-lg p-6 mb-6">
           {!gameState.gameStarted ? (
             <div className="text-center">
-              <h2 className="text-xl mb-4">
-                Добро пожаловать в тренер блэкджека!
-              </h2>
-              <p className="mb-4">
-                Настройте параметры игры и начните тренировку счета карт
-              </p>
+              <h2 className="text-xl mb-4">{t.welcomeTitle}</h2>
+              <p className="mb-4">{t.welcomeSubtitle}</p>
               <div className="flex flex-wrap justify-center gap-4">
                 <button
                   onClick={() =>
@@ -1109,7 +1171,7 @@ const BlackjackTrainer = () => {
                   className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 flex items-center space-x-2"
                 >
                   <Settings size={20} />
-                  <span>Настройки</span>
+                  <span>{t.btnSettings}</span>
                 </button>
                 <button
                   onClick={() =>
@@ -1118,14 +1180,23 @@ const BlackjackTrainer = () => {
                   className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
                 >
                   <HistoryIcon size={20} />
-                  <span>История</span>
+                  <span>{t.btnHistory}</span>
+                </button>
+                <button
+                  onClick={() =>
+                    setGameState((prev) => ({ ...prev, showHelp: true }))
+                  }
+                  className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
+                >
+                  <HelpCircle size={20} />
+                  <span>{t.btnHelp}</span>
                 </button>
                 <button
                   onClick={initializeGame}
                   className="bg-green-500 text-white px-6 py-3 rounded-lg hover:bg-green-600 flex items-center space-x-2"
                 >
                   <Play size={20} />
-                  <span>Начать игру</span>
+                  <span>{t.btnStart}</span>
                 </button>
               </div>
             </div>
@@ -1133,7 +1204,7 @@ const BlackjackTrainer = () => {
             <div>
               {/* Дилер */}
               <div className="mb-6">
-                <h3 className="text-lg font-bold mb-2">Дилер</h3>
+                <h3 className="text-lg font-bold mb-2">{t.dealerLabel}</h3>
                 <div className="flex space-x-2">
                   {gameState.dealerHand.map((card, idx) => (
                     <Card
@@ -1145,7 +1216,7 @@ const BlackjackTrainer = () => {
                 </div>
                 {!gameState.dealerHoleHidden && gameState.dealerHand.length > 1 && (
                   <div className="text-sm mt-2">
-                    Сумма: {getHandValue(gameState.dealerHand)}
+                    {t.sumLabel}: {getHandValue(gameState.dealerHand)}
                   </div>
                 )}
               </div>
@@ -1156,7 +1227,9 @@ const BlackjackTrainer = () => {
                   (boxHands, boxIdx) =>
                     gameSettings.activePositions.includes(boxIdx + 1) && (
                       <div key={boxIdx} className="bg-green-600 rounded-lg p-3">
-                        <h4 className="font-bold mb-2">Бокс {boxIdx + 1}</h4>
+                        <h4 className="font-bold mb-2">
+                          {t.boxLabel} {boxIdx + 1}
+                        </h4>
                         <div className="space-y-2">
                           {boxHands.map((hand, handIdx) => {
                             const isActive =
@@ -1173,7 +1246,7 @@ const BlackjackTrainer = () => {
                               >
                                 {boxHands.length > 1 && (
                                   <div className="text-xs font-semibold mb-1">
-                                    Рука {handIdx + 1}
+                                    {t.handLabel} {handIdx + 1}
                                   </div>
                                 )}
                                 <div className="flex space-x-1 mb-1">
@@ -1182,8 +1255,8 @@ const BlackjackTrainer = () => {
                                   ))}
                                 </div>
                                 <div className="text-sm mb-1">
-                                  Сумма: {getHandValue(hand.cards)}
-                                  {hand.doubled && " (х2)"}
+                                  {t.sumLabel}: {getHandValue(hand.cards)}
+                                  {hand.doubled && ` ${t.doubledTag}`}
                                 </div>
                                 {handStatusLabel[hand.status] && (
                                   <div className="text-sm font-bold mb-1">
@@ -1197,13 +1270,13 @@ const BlackjackTrainer = () => {
                                       disabled={gameState.shoe.length === 0}
                                       className="bg-blue-500 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600 disabled:opacity-50"
                                     >
-                                      Взять
+                                      {t.btnHit}
                                     </button>
                                     <button
                                       onClick={stand}
                                       className="bg-gray-500 text-white px-3 py-1.5 rounded text-sm hover:bg-gray-600"
                                     >
-                                      Стоп
+                                      {t.btnStand}
                                     </button>
                                     {hand.cards.length === 2 && (
                                       <button
@@ -1211,7 +1284,7 @@ const BlackjackTrainer = () => {
                                         disabled={gameState.shoe.length === 0}
                                         className="bg-purple-500 text-white px-3 py-1.5 rounded text-sm hover:bg-purple-600 disabled:opacity-50"
                                       >
-                                        Х2
+                                        {t.btnDouble}
                                       </button>
                                     )}
                                     {canSplitHand(hand, boxHands.length) &&
@@ -1220,7 +1293,7 @@ const BlackjackTrainer = () => {
                                           onClick={split}
                                           className="bg-orange-500 text-white px-3 py-1.5 rounded text-sm hover:bg-orange-600"
                                         >
-                                          Сплит
+                                          {t.btnSplit}
                                         </button>
                                       )}
                                   </div>
@@ -1237,7 +1310,7 @@ const BlackjackTrainer = () => {
               {/* Ввод счета */}
               {gameState.phase === "counting" && (
                 <div className="bg-yellow-600 rounded-lg p-4 mb-4">
-                  <h3 className="font-bold mb-2">Введите текущий счет:</h3>
+                  <h3 className="font-bold mb-2">{t.countPrompt}</h3>
                   <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                     <input
                       type="number"
@@ -1249,7 +1322,7 @@ const BlackjackTrainer = () => {
                         }))
                       }
                       className="flex-1 min-w-0 px-3 py-2 rounded text-black"
-                      placeholder="Ваш счет"
+                      placeholder={t.countPlaceholder}
                       autoFocus
                     />
                     <button
@@ -1257,7 +1330,7 @@ const BlackjackTrainer = () => {
                       className="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600 disabled:opacity-50"
                       disabled={!gameState.playerInput}
                     >
-                      Проверить
+                      {t.btnCheck}
                     </button>
                   </div>
                 </div>
@@ -1274,11 +1347,15 @@ const BlackjackTrainer = () => {
                 >
                   <div className="font-bold">
                     {gameState.playerCount === gameState.actualCount
-                      ? "✓ Правильно!"
-                      : "✗ Неправильно"}
+                      ? t.resultCorrect
+                      : t.resultIncorrect}
                   </div>
-                  <div>Ваш ответ: {gameState.playerCount}</div>
-                  <div>Правильный счет: {gameState.actualCount}</div>
+                  <div>
+                    {t.yourAnswer}: {gameState.playerCount}
+                  </div>
+                  <div>
+                    {t.correctCount}: {gameState.actualCount}
+                  </div>
                 </div>
               )}
 
@@ -1290,7 +1367,7 @@ const BlackjackTrainer = () => {
                     className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 flex items-center space-x-2"
                   >
                     <Play size={20} />
-                    <span>Следующий раунд</span>
+                    <span>{t.btnNextRound}</span>
                   </button>
                 )}
 
@@ -1301,7 +1378,7 @@ const BlackjackTrainer = () => {
                   className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
                 >
                   <Settings size={20} />
-                  <span>Настройки</span>
+                  <span>{t.btnSettings}</span>
                 </button>
 
                 <button
@@ -1311,7 +1388,17 @@ const BlackjackTrainer = () => {
                   className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
                 >
                   <HistoryIcon size={20} />
-                  <span>История</span>
+                  <span>{t.btnHistory}</span>
+                </button>
+
+                <button
+                  onClick={() =>
+                    setGameState((prev) => ({ ...prev, showHelp: true }))
+                  }
+                  className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
+                >
+                  <HelpCircle size={20} />
+                  <span>{t.btnHelp}</span>
                 </button>
 
                 <button
@@ -1322,7 +1409,7 @@ const BlackjackTrainer = () => {
                   className="bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 flex items-center space-x-2"
                 >
                   <RotateCcw size={20} />
-                  <span>Новая игра</span>
+                  <span>{t.btnNewGame}</span>
                 </button>
               </div>
             </div>
@@ -1331,17 +1418,17 @@ const BlackjackTrainer = () => {
 
         {/* Справочная информация */}
         <div className="bg-green-700 rounded-lg p-4">
-          <h3 className="font-bold mb-2">Системы счета карт:</h3>
+          <h3 className="font-bold mb-2">{t.referenceTitle}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div>
-              <strong>High-Low:</strong>
+              <strong>{t.highLowName}</strong>
               <br />
-              2-6: +1, 7-9: 0, 10-A: -1
+              {t.highLowDesc}
             </div>
             <div>
-              <strong>Omega II:</strong>
+              <strong>{t.omegaName}</strong>
               <br />
-              2,3,7: +1, 4,5,6: +2, 8,A: 0, 9: -1, 10,J,Q,K: -2
+              {t.omegaDesc}
             </div>
           </div>
         </div>
@@ -1350,6 +1437,7 @@ const BlackjackTrainer = () => {
       {/* Модальное окно настроек */}
       {gameState.showSettings && (
         <SettingsPanel
+          t={t}
           initialSettings={gameSettings}
           gameStarted={gameState.gameStarted}
           onApply={(settings) => {
@@ -1366,6 +1454,8 @@ const BlackjackTrainer = () => {
       {/* Модальное окно истории */}
       {gameState.showHistory && (
         <HistoryPanel
+          t={t}
+          language={language}
           history={history}
           onClear={() => {
             setHistory([]);
@@ -1377,10 +1467,19 @@ const BlackjackTrainer = () => {
         />
       )}
 
+      {/* Модальное окно помощи */}
+      {gameState.showHelp && (
+        <HelpPanel
+          t={t}
+          onClose={() => setGameState((prev) => ({ ...prev, showHelp: false }))}
+        />
+      )}
+
       {/* Уведомления вместо alert() */}
       {gameState.notice && (
         <NoticeModal
           message={gameState.notice}
+          okLabel={t.ok}
           onClose={() => setGameState((prev) => ({ ...prev, notice: null }))}
         />
       )}
