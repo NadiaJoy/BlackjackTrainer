@@ -31,6 +31,7 @@ interface GameSettings {
   countingSystem: CountingSystem;
   positions: number;
   activePositions: number[];
+  autoAdvance: boolean;
 }
 
 interface GameState {
@@ -224,6 +225,30 @@ const SettingsPanel = ({
               ))}
             </div>
           </div>
+
+          <div>
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={draft.autoAdvance}
+                onChange={(e) =>
+                  setDraft((prev) => ({
+                    ...prev,
+                    autoAdvance: e.target.checked,
+                  }))
+                }
+              />
+              <span className="text-sm font-medium">
+                Автоматически переходить к следующему раунду
+              </span>
+            </label>
+            {!draft.autoAdvance && (
+              <p className="text-sm text-gray-500 mt-1">
+                После проверки счёта нужно будет нажимать «Следующий раунд»
+                самостоятельно.
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="flex space-x-4 mt-6">
@@ -252,6 +277,7 @@ const BlackjackTrainer = () => {
     countingSystem: "high-low",
     positions: 3,
     activePositions: [1, 2, 3],
+    autoAdvance: true,
   });
 
   const [gameState, setGameState] = useState<GameState>({
@@ -474,9 +500,7 @@ const BlackjackTrainer = () => {
 
     // Показать результат на 2 секунды
     setTimeout(() => {
-      if (hasMoreRounds) {
-        dealRound();
-      } else {
+      if (!hasMoreRounds) {
         const accuracy = Math.round(
           (finalScore.correct / finalScore.total) * 100
         );
@@ -484,6 +508,8 @@ const BlackjackTrainer = () => {
           ...prev,
           notice: `Игра окончена! Точность: ${accuracy}%`,
         }));
+      } else if (gameSettings.autoAdvance) {
+        dealRound();
       }
     }, 2000);
   };
