@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Settings, Play, RotateCcw } from "lucide-react";
+import { Settings, Play, RotateCcw, History as HistoryIcon } from "lucide-react";
 
 type Suit = "♠" | "♥" | "♦" | "♣";
 type Rank =
@@ -64,11 +64,89 @@ interface GameState {
   playerInput: string;
   score: { correct: number; total: number };
   showSettings: boolean;
+  showHistory: boolean;
   hands: PlayerHand[][];
   dealerHand: PlayingCard[];
   dealerHoleHidden: boolean;
   notice: string | null;
 }
+
+interface SessionRecord {
+  date: string;
+  countingSystem: CountingSystem;
+  numDecks: number;
+  rounds: number;
+  correct: number;
+  total: number;
+}
+
+const DEFAULT_SETTINGS: GameSettings = {
+  numDecks: 6,
+  cutCards: 1.5,
+  countingSystem: "high-low",
+  positions: 3,
+  activePositions: [1, 2, 3],
+  autoAdvance: true,
+  dealerHitsSoft17: false,
+  maxSplitHands: 4,
+};
+
+const SETTINGS_KEY = "blackjack-trainer:settings";
+const HISTORY_KEY = "blackjack-trainer:history";
+const MAX_HISTORY_ENTRIES = 50;
+
+// localStorage может быть недоступен (приватный режим и т.п.) — везде
+// оборачиваем в try/catch и тихо откатываемся к дефолтам, не роняя приложение.
+const loadSettings = (): GameSettings => {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return DEFAULT_SETTINGS;
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+};
+
+const saveSettings = (settings: GameSettings) => {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    // хранилище недоступно — просто не сохраняем
+  }
+};
+
+const loadHistory = (): SessionRecord[] => {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveHistory = (history: SessionRecord[]) => {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  } catch {
+    // хранилище недоступно — просто не сохраняем
+  }
+};
+
+const formatSessionDate = (iso: string): string => {
+  try {
+    return new Date(iso).toLocaleString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso;
+  }
+};
 
 const Card = ({
   card,
@@ -337,17 +415,108 @@ const SettingsPanel = ({
   );
 };
 
+interface HistoryPanelProps {
+  history: SessionRecord[];
+  onClear: () => void;
+  onClose: () => void;
+}
+
+const HistoryPanel = ({ history, onClear, onClose }: HistoryPanelProps) => {
+  const [confirmingClear, setConfirmingClear] = useState(false);
+
+  const totals = history.reduce(
+    (acc, r) => ({ correct: acc.correct + r.correct, total: acc.total + r.total }),
+    { correct: 0, total: 0 }
+  );
+  const overallAccuracy =
+    totals.total > 0 ? Math.round((totals.correct / totals.total) * 100) : 0;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 text-gray-900 max-h-[85vh] flex flex-col">
+        <h3 className="text-xl font-bold mb-4">История сессий</h3>
+
+        {history.length === 0 ? (
+          <p className="text-sm text-gray-500 mb-4">
+            Пока нет завершённых колод. Доиграйте колоду до конца или нажмите
+            «Новая игра» во время игры — появится первая запись.
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-gray-500 mb-3">
+              Средняя точность за всё время: {overallAccuracy}% ({history.length}{" "}
+              {history.length === 1 ? "колода" : "колод"})
+            </p>
+            <div className="overflow-y-auto flex-1 space-y-2 mb-4">
+              {history.map((record, idx) => (
+                <div
+                  key={idx}
+                  className="border rounded px-3 py-2 text-sm flex justify-between items-center gap-3"
+                >
+                  <div>
+                    <div className="font-medium">
+                      {formatSessionDate(record.date)}
+                    </div>
+                    <div className="text-gray-500">
+                      {record.countingSystem.toUpperCase()} · {record.numDecks}{" "}
+                      колод · {record.rounds} раунд(ов)
+                    </div>
+                  </div>
+                  <div className="text-lg font-bold whitespace-nowrap">
+                    {Math.round((record.correct / record.total) * 100)}%
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        <div className="flex space-x-4 mt-auto">
+          {confirmingClear ? (
+            <>
+              <button
+                onClick={() => setConfirmingClear(false)}
+                className="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => {
+                  onClear();
+                  setConfirmingClear(false);
+                }}
+                className="flex-1 bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+              >
+                Точно очистить
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={onClose}
+                className="flex-1 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+              >
+                Закрыть
+              </button>
+              {history.length > 0 && (
+                <button
+                  onClick={() => setConfirmingClear(true)}
+                  className="flex-1 bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
+                >
+                  Очистить историю
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const BlackjackTrainer = () => {
-  const [gameSettings, setGameSettings] = useState<GameSettings>({
-    numDecks: 6,
-    cutCards: 1.5,
-    countingSystem: "high-low",
-    positions: 3,
-    activePositions: [1, 2, 3],
-    autoAdvance: true,
-    dealerHitsSoft17: false,
-    maxSplitHands: 4,
-  });
+  const [gameSettings, setGameSettings] = useState<GameSettings>(loadSettings);
+  const [history, setHistory] = useState<SessionRecord[]>(loadHistory);
 
   const [gameState, setGameState] = useState<GameState>({
     shoe: [],
@@ -362,6 +531,7 @@ const BlackjackTrainer = () => {
     playerInput: "",
     score: { correct: 0, total: 0 },
     showSettings: false,
+    showHistory: false,
     hands: [],
     dealerHand: [],
     dealerHoleHidden: true,
@@ -469,6 +639,26 @@ const BlackjackTrainer = () => {
 
   // Минимум карт, нужный для раздачи ещё одного раунда
   const minCardsForRound = () => (gameSettings.activePositions.length + 1) * 2;
+
+  // Записать завершённую колоду в историю (localStorage), если по ней
+  // вообще был хоть один ответ. Пишем в localStorage синхронно, а не через
+  // функциональный setHistory — один из вызовов идёт прямо перед
+  // window.location.reload(), и обновление state могло бы не успеть
+  // примениться до перезагрузки страницы.
+  const recordSession = (rounds: number, score: { correct: number; total: number }) => {
+    if (score.total === 0) return;
+    const record: SessionRecord = {
+      date: new Date().toISOString(),
+      countingSystem: gameSettings.countingSystem,
+      numDecks: gameSettings.numDecks,
+      rounds,
+      correct: score.correct,
+      total: score.total,
+    };
+    const next = [record, ...history].slice(0, MAX_HISTORY_ENTRIES);
+    saveHistory(next);
+    setHistory(next);
+  };
 
   // Раздача стартовых карт одного раунда (чистая функция, без обращения к state)
   const buildRoundDeal = (shoe: PlayingCard[], dealtCardsSoFar: PlayingCard[]) => {
@@ -633,6 +823,7 @@ const BlackjackTrainer = () => {
         gameState.score.total > 0
           ? Math.round((gameState.score.correct / gameState.score.total) * 100)
           : 0;
+      recordSession(gameState.currentRound, gameState.score);
       setGameState((prev) => ({
         ...prev,
         notice: `Колода закончилась! Точность за игру: ${accuracy}%`,
@@ -824,6 +1015,7 @@ const BlackjackTrainer = () => {
     // из замыкания — к моменту срабатывания setTimeout значения в gameState
     // уже могли устареть.
     const canDealAnotherRound = gameState.shoe.length >= minCardsForRound();
+    const roundsPlayed = gameState.currentRound;
     const finalScore = {
       correct: gameState.score.correct + (isCorrect ? 1 : 0),
       total: gameState.score.total + 1,
@@ -843,6 +1035,7 @@ const BlackjackTrainer = () => {
         const accuracy = Math.round(
           (finalScore.correct / finalScore.total) * 100
         );
+        recordSession(roundsPlayed, finalScore);
         setGameState((prev) => ({
           ...prev,
           notice: `Колода закончилась! Точность за игру: ${accuracy}%`,
@@ -917,6 +1110,15 @@ const BlackjackTrainer = () => {
                 >
                   <Settings size={20} />
                   <span>Настройки</span>
+                </button>
+                <button
+                  onClick={() =>
+                    setGameState((prev) => ({ ...prev, showHistory: true }))
+                  }
+                  className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
+                >
+                  <HistoryIcon size={20} />
+                  <span>История</span>
                 </button>
                 <button
                   onClick={initializeGame}
@@ -1103,7 +1305,20 @@ const BlackjackTrainer = () => {
                 </button>
 
                 <button
-                  onClick={() => window.location.reload()}
+                  onClick={() =>
+                    setGameState((prev) => ({ ...prev, showHistory: true }))
+                  }
+                  className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
+                >
+                  <HistoryIcon size={20} />
+                  <span>История</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    recordSession(gameState.currentRound, gameState.score);
+                    window.location.reload();
+                  }}
                   className="bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 flex items-center space-x-2"
                 >
                   <RotateCcw size={20} />
@@ -1139,10 +1354,25 @@ const BlackjackTrainer = () => {
           gameStarted={gameState.gameStarted}
           onApply={(settings) => {
             setGameSettings(settings);
+            saveSettings(settings);
             setGameState((prev) => ({ ...prev, showSettings: false }));
           }}
           onCancel={() =>
             setGameState((prev) => ({ ...prev, showSettings: false }))
+          }
+        />
+      )}
+
+      {/* Модальное окно истории */}
+      {gameState.showHistory && (
+        <HistoryPanel
+          history={history}
+          onClear={() => {
+            setHistory([]);
+            saveHistory([]);
+          }}
+          onClose={() =>
+            setGameState((prev) => ({ ...prev, showHistory: false }))
           }
         />
       )}
