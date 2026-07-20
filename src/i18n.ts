@@ -176,7 +176,7 @@ export const STRINGS: Record<Language, Strings> = {
     maxSplitOption4: "4 руки (по умолчанию)",
     maxSplitOptionUnlimited: "Без ограничений",
     maxSplitHint:
-      "Пара внутри бокса даёт «Сплит»: рука делится на две, каждая получает свою карту. Если в одной из новых рук снова пара — её тоже можно сплитовать, пока не будет достигнут лимит.",
+      "Сплит доступен при равном достоинстве карт — не только пары (8-8), но и любые две карты по 10 очков, включая разные картинки (например, дама и король). Если в новой руке снова подходящая пара — её тоже можно сплитовать, пока не будет достигнут лимит. Исключение — тузы: каждый получает ровно одну карту и сразу останавливается, без добора, удвоения и повторного сплита.",
     cancel: "Отмена",
     apply: "Применить",
 
@@ -206,7 +206,7 @@ export const STRINGS: Record<Language, Strings> = {
       },
       {
         title: "Как играть раунд",
-        body: "У дилера одна карта открыта, вторая — закрыта. Для каждого активного бокса по очереди доступны кнопки: «Взять» (ещё карта), «Стоп» (закончить руку), «Х2» (ровно одна карта и автостоп — только пока в руке две карты), «Сплит» (если в руке пара — разделить её на две руки; если в новой руке снова выпадет пара, сплитовать можно ещё раз).",
+        body: "У дилера одна карта открыта, вторая — закрыта. Для каждого активного бокса по очереди доступны кнопки: «Взять» (ещё карта), «Стоп» (закончить руку), «Х2» (ровно одна карта и автостоп — только пока в руке две карты), «Сплит» (при равном достоинстве карт, включая разные картинки — разделить руку на две; если в новой руке снова подходящая пара, сплитовать можно ещё раз). Тузы — исключение: каждый после сплита получает ровно одну карту и сразу останавливается, без добора, удвоения и повторного сплита.",
       },
       {
         title: "Ход дилера и проверка счёта",
@@ -294,7 +294,7 @@ export const STRINGS: Record<Language, Strings> = {
     maxSplitOption4: "4 hands (default)",
     maxSplitOptionUnlimited: "No limit",
     maxSplitHint:
-      "A pair in a box enables \"Split\": the hand splits into two, each getting its own card. If one of the new hands is a pair again, it can be split once more, up to the limit.",
+      "Split is available on equal card value — not just pairs (8-8), but any two 10-value cards, including mismatched face cards (e.g. Queen and King). If a new hand is a matching pair again, it can be split once more, up to the limit. Exception: Aces — each gets exactly one card and stands immediately, with no further hits, doubling, or resplitting.",
     cancel: "Cancel",
     apply: "Apply",
 
@@ -324,7 +324,7 @@ export const STRINGS: Record<Language, Strings> = {
       },
       {
         title: "Playing a round",
-        body: "The dealer shows one card face up and one face down. Each active box, in turn, gets buttons: \"Hit\" (another card), \"Stand\" (finish the hand), \"Double\" (exactly one more card and an automatic stand — only while the hand has two cards), \"Split\" (if the hand is a pair, split it into two hands; if a new hand pairs up again, it can be split again).",
+        body: "The dealer shows one card face up and one face down. Each active box, in turn, gets buttons: \"Hit\" (another card), \"Stand\" (finish the hand), \"Double\" (exactly one more card and an automatic stand — only while the hand has two cards), \"Split\" (on equal card value, including mismatched face cards — split the hand into two; if a new hand is a matching pair again, it can be split again). Aces are an exception: each gets exactly one card after a split and stands immediately, with no further hits, doubling, or resplitting.",
       },
       {
         title: "Dealer's turn and checking your count",

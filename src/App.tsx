@@ -56,6 +56,10 @@ interface PlayerHand {
   cards: PlayingCard[];
   status: HandStatus;
   doubled: boolean;
+  // Рука — результат сплита пары тузов: получает ровно одну карту и больше
+  // не может ни бить, ни удваивать, ни (ре)сплитоваться, даже если добранная
+  // карта снова туз.
+  isSplitAce: boolean;
 }
 
 interface HandLocation {
@@ -687,9 +691,13 @@ const BlackjackTrainer = () => {
   const isNaturalBlackjack = (hand: PlayingCard[]): boolean =>
     hand.length === 2 && getHandValue(hand) === 21;
 
+  // Сплит разрешён по равному ДОСТОИНСТВУ карт, а не по рангу — например,
+  // дама и король тоже образуют пару (обе стоят 10). Сплит-тузы дальше не
+  // сплитуются вообще, даже если добранная карта — снова туз.
   const canSplitHand = (hand: PlayerHand, handsInBox: number): boolean =>
+    !hand.isSplitAce &&
     hand.cards.length === 2 &&
-    hand.cards[0].rank === hand.cards[1].rank &&
+    hand.cards[0].value === hand.cards[1].value &&
     handsInBox < gameSettings.maxSplitHands;
 
   // Минимум карт, нужный для раздачи ещё одного раунда
@@ -750,7 +758,7 @@ const BlackjackTrainer = () => {
       dealtCards.push(card);
       const cards = [first, card];
       const status: HandStatus = isNaturalBlackjack(cards) ? "blackjack" : "playing";
-      hands.push([{ cards, status, doubled: false }]);
+      hands.push([{ cards, status, doubled: false, isSplitAce: false }]);
     }
 
     // Закрытая карта дилера (не показываем, пока не сыграют все боксы)
@@ -936,10 +944,11 @@ const BlackjackTrainer = () => {
     const box = gameState.activeBoxIndex;
     const handIdx = gameState.activeHandIndex;
     if (box === null || handIdx === null || gameState.shoe.length === 0) return;
+    const hand = gameState.hands[box][handIdx];
+    if (hand.isSplitAce) return;
 
     const newShoe = [...gameState.shoe];
     const card = newShoe.pop()!;
-    const hand = gameState.hands[box][handIdx];
     const newCards = [...hand.cards, card];
     const newDealtCards = [...gameState.dealtCards, card];
     const { value } = getHandInfo(newCards);
@@ -987,7 +996,8 @@ const BlackjackTrainer = () => {
     const handIdx = gameState.activeHandIndex;
     if (box === null || handIdx === null) return;
     const hand = gameState.hands[box][handIdx];
-    if (hand.cards.length !== 2 || gameState.shoe.length === 0) return;
+    if (hand.cards.length !== 2 || hand.isSplitAce || gameState.shoe.length === 0)
+      return;
 
     const newShoe = [...gameState.shoe];
     const card = newShoe.pop()!;
@@ -1000,6 +1010,7 @@ const BlackjackTrainer = () => {
       cards: newCards,
       status: value > 21 ? "bust" : "stood",
       doubled: true,
+      isSplitAce: false,
     };
 
     setGameState((prev) => ({
@@ -1015,6 +1026,8 @@ const BlackjackTrainer = () => {
   // Игрок делает сплит: пара делится на две руки, каждая получает по карте.
   // Если после сплита в одной из новых рук снова пара — её можно сплитовать
   // ещё раз, вплоть до gameSettings.maxSplitHands рук в боксе.
+  // Исключение — сплит тузов: каждая рука получает ровно одну карту и сразу
+  // останавливается, без добора, удвоения и повторного сплита.
   const split = () => {
     const box = gameState.activeBoxIndex;
     const handIdx = gameState.activeHandIndex;
@@ -1024,6 +1037,8 @@ const BlackjackTrainer = () => {
     const hand = boxHands[handIdx];
     if (!canSplitHand(hand, boxHands.length) || gameState.shoe.length < 2) return;
 
+    const isAceSplit = hand.cards[0].rank === "A";
+
     const newShoe = [...gameState.shoe];
     const cardA = newShoe.pop()!;
     const cardB = newShoe.pop()!;
@@ -1031,9 +1046,11 @@ const BlackjackTrainer = () => {
 
     const makeSplitHand = (originalCard: PlayingCard, newCard: PlayingCard): PlayerHand => {
       const cards = [originalCard, newCard];
-      // 21 после сплита — не натуральный блэкджек, просто стоп
-      const status: HandStatus = getHandValue(cards) === 21 ? "stood" : "playing";
-      return { cards, status, doubled: false };
+      // 21 после сплита — не натуральный блэкджек, просто стоп. Сплит-тузы
+      // всегда останавливаются сразу же, независимо от суммы.
+      const status: HandStatus =
+        isAceSplit || getHandValue(cards) === 21 ? "stood" : "playing";
+      return { cards, status, doubled: false, isSplitAce: isAceSplit };
     };
 
     const handA = makeSplitHand(hand.cards[0], cardA);
