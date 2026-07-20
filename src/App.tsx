@@ -42,7 +42,6 @@ interface GameSettings {
   numDecks: number;
   cutCards: number;
   countingSystem: CountingSystem;
-  positions: number;
   activePositions: number[];
   autoAdvance: boolean;
   dealerHitsSoft17: boolean;
@@ -94,11 +93,15 @@ interface SessionRecord {
   total: number;
 }
 
+// Число боксов за столом фиксировано в UI (чекбоксы «Бокс 1»..«Бокс 6»),
+// поэтому используем его напрямую как размер массива рук вместо отдельного
+// настраиваемого поля, которое раньше было не синхронизировано с чекбоксами.
+const MAX_BOXES = 6;
+
 const DEFAULT_SETTINGS: GameSettings = {
   numDecks: 6,
   cutCards: 1.5,
   countingSystem: "high-low",
-  positions: 3,
   activePositions: [1, 2, 3],
   autoAdvance: true,
   dealerHitsSoft17: false,
@@ -307,7 +310,7 @@ const SettingsPanel = ({
               {t.positionsLabel}
             </label>
             <div className="grid grid-cols-3 gap-2">
-              {[1, 2, 3, 4, 5, 6].map((pos) => (
+              {Array.from({ length: MAX_BOXES }, (_, i) => i + 1).map((pos) => (
                 <label key={pos} className="flex items-center space-x-2">
                   <input
                     type="checkbox"
@@ -721,7 +724,7 @@ const BlackjackTrainer = () => {
     let firstCards: (PlayingCard | null)[] = [];
 
     // Раздача первой карты каждому игроку
-    for (let i = 0; i < gameSettings.positions; i++) {
+    for (let i = 0; i < MAX_BOXES; i++) {
       if (gameSettings.activePositions.includes(i + 1)) {
         const card = newShoe.pop()!;
         firstCards.push(card);
@@ -737,7 +740,7 @@ const BlackjackTrainer = () => {
     dealtCards.push(dealerFirstCard);
 
     // Вторая карта каждому игроку — собираем итоговую руку бокса
-    for (let i = 0; i < gameSettings.positions; i++) {
+    for (let i = 0; i < MAX_BOXES; i++) {
       const first = firstCards[i];
       if (first === null) {
         hands.push([]);
