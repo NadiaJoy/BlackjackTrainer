@@ -3,3 +3,20 @@ dist
 .DS_Store
 *.local
 .claude
+
+# IDE
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# Env files (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+
+# Editor swap files
+*.swp
+*.swo
