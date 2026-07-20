@@ -353,6 +353,6 @@ export const saveLanguage = (language: Language) => {
   try {
     localStorage.setItem(LANGUAGE_KEY, language);
   } catch {
-    // хранилище недоступно — просто не сохраняем
+    // storage unavailable — just skip saving
   }
 };

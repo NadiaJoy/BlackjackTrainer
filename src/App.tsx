@@ -56,9 +56,9 @@ interface PlayerHand {
   cards: PlayingCard[];
   status: HandStatus;
   doubled: boolean;
-  // Рука — результат сплита пары тузов: получает ровно одну карту и больше
-  // не может ни бить, ни удваивать, ни (ре)сплитоваться, даже если добранная
-  // карта снова туз.
+  // A hand that resulted from splitting a pair of Aces: gets exactly one
+  // card and can no longer hit, double, or (re)split, even if the drawn
+  // card is another Ace.
   isSplitAce: boolean;
 }
 
@@ -97,9 +97,10 @@ interface SessionRecord {
   total: number;
 }
 
-// Число боксов за столом фиксировано в UI (чекбоксы «Бокс 1»..«Бокс 6»),
-// поэтому используем его напрямую как размер массива рук вместо отдельного
-// настраиваемого поля, которое раньше было не синхронизировано с чекбоксами.
+// The number of boxes at the table is fixed in the UI (checkboxes "Box
+// 1".."Box 6"), so we use it directly as the hands array size instead of
+// a separate configurable field that used to be out of sync with the
+// checkboxes.
 const MAX_BOXES = 6;
 
 const DEFAULT_SETTINGS: GameSettings = {
@@ -116,8 +117,9 @@ const SETTINGS_KEY = "blackjack-trainer:settings";
 const HISTORY_KEY = "blackjack-trainer:history";
 const MAX_HISTORY_ENTRIES = 50;
 
-// localStorage может быть недоступен (приватный режим и т.п.) — везде
-// оборачиваем в try/catch и тихо откатываемся к дефолтам, не роняя приложение.
+// localStorage may be unavailable (private browsing, etc.) — wrap every
+// access in try/catch and silently fall back to defaults instead of
+// crashing the app.
 const loadSettings = (): GameSettings => {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -132,7 +134,7 @@ const saveSettings = (settings: GameSettings) => {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   } catch {
-    // хранилище недоступно — просто не сохраняем
+    // storage unavailable — just skip saving
   }
 };
 
@@ -151,7 +153,7 @@ const saveHistory = (history: SessionRecord[]) => {
   try {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
   } catch {
-    // хранилище недоступно — просто не сохраняем
+    // storage unavailable — just skip saving
   }
 };
 
@@ -597,7 +599,7 @@ const BlackjackTrainer = () => {
     notice: null,
   });
 
-  // Создание колоды
+  // Build the deck
   const createDeck = useCallback(() => {
     const suits: Suit[] = ["♠", "♥", "♦", "♣"];
     const ranks: Rank[] = [
@@ -642,7 +644,7 @@ const BlackjackTrainer = () => {
     return parseInt(rank);
   };
 
-  // Системы счета карт
+  // Counting systems
   const getCountValue = (card: PlayingCard): number => {
     const { rank } = card;
 
@@ -663,7 +665,7 @@ const BlackjackTrainer = () => {
     return 0;
   };
 
-  // Значение руки + признак "мягкой" руки (туз всё ещё считается за 11)
+  // Hand value + whether it's "soft" (an Ace is still counted as 11)
   const getHandInfo = (hand: PlayingCard[]): { value: number; soft: boolean } => {
     let value = 0;
     let aces = 0;
@@ -691,23 +693,23 @@ const BlackjackTrainer = () => {
   const isNaturalBlackjack = (hand: PlayingCard[]): boolean =>
     hand.length === 2 && getHandValue(hand) === 21;
 
-  // Сплит разрешён по равному ДОСТОИНСТВУ карт, а не по рангу — например,
-  // дама и король тоже образуют пару (обе стоят 10). Сплит-тузы дальше не
-  // сплитуются вообще, даже если добранная карта — снова туз.
+  // Splitting is allowed on equal card VALUE, not rank — e.g. a queen and
+  // a king also count as a pair (both worth 10). Ace-split hands can never
+  // be split again, even if the drawn card is another Ace.
   const canSplitHand = (hand: PlayerHand, handsInBox: number): boolean =>
     !hand.isSplitAce &&
     hand.cards.length === 2 &&
     hand.cards[0].value === hand.cards[1].value &&
     handsInBox < gameSettings.maxSplitHands;
 
-  // Минимум карт, нужный для раздачи ещё одного раунда
+  // Minimum cards needed to deal another round
   const minCardsForRound = () => (gameSettings.activePositions.length + 1) * 2;
 
-  // Записать завершённую колоду в историю (localStorage), если по ней
-  // вообще был хоть один ответ. Пишем в localStorage синхронно, а не через
-  // функциональный setHistory — один из вызовов идёт прямо перед
-  // window.location.reload(), и обновление state могло бы не успеть
-  // примениться до перезагрузки страницы.
+  // Log a completed shoe to history (localStorage) if at least one answer
+  // was given. Writes to localStorage synchronously rather than through
+  // the functional setHistory — one call site fires right before
+  // window.location.reload(), and the state update might not apply before
+  // the page reloads.
   const recordSession = (rounds: number, score: { correct: number; total: number }) => {
     if (score.total === 0) return;
     const record: SessionRecord = {
@@ -723,7 +725,7 @@ const BlackjackTrainer = () => {
     setHistory(next);
   };
 
-  // Раздача стартовых карт одного раунда (чистая функция, без обращения к state)
+  // Deal the starting cards for one round (pure function, no state access)
   const buildRoundDeal = (shoe: PlayingCard[], dealtCardsSoFar: PlayingCard[]) => {
     let newShoe = [...shoe];
     let dealtCards = [...dealtCardsSoFar];
@@ -731,7 +733,7 @@ const BlackjackTrainer = () => {
     let dealerHand: PlayingCard[] = [];
     let firstCards: (PlayingCard | null)[] = [];
 
-    // Раздача первой карты каждому игроку
+    // Deal the first card to each player
     for (let i = 0; i < MAX_BOXES; i++) {
       if (gameSettings.activePositions.includes(i + 1)) {
         const card = newShoe.pop()!;
@@ -742,12 +744,12 @@ const BlackjackTrainer = () => {
       }
     }
 
-    // Первая карта дилера
+    // Dealer's first card
     const dealerFirstCard = newShoe.pop()!;
     dealerHand.push(dealerFirstCard);
     dealtCards.push(dealerFirstCard);
 
-    // Вторая карта каждому игроку — собираем итоговую руку бокса
+    // Second card to each player — assemble the box's final hand
     for (let i = 0; i < MAX_BOXES; i++) {
       const first = firstCards[i];
       if (first === null) {
@@ -761,7 +763,7 @@ const BlackjackTrainer = () => {
       hands.push([{ cards, status, doubled: false, isSplitAce: false }]);
     }
 
-    // Закрытая карта дилера (не показываем, пока не сыграют все боксы)
+    // Dealer's hole card (kept hidden until every box is done)
     const dealerSecondCard = newShoe.pop()!;
     dealerHand.push(dealerSecondCard);
     dealtCards.push(dealerSecondCard);
@@ -769,8 +771,8 @@ const BlackjackTrainer = () => {
     return { newShoe, dealtCards, hands, dealerHand };
   };
 
-  // Найти следующую руку в статусе "playing", сначала в пределах текущего
-  // бокса (пересплит), затем в следующих боксах
+  // Find the next "playing" hand, first within the current box (resplit),
+  // then in the following boxes
   const findNextPlayingHand = (
     hands: PlayerHand[][],
     fromBox: number,
@@ -785,14 +787,15 @@ const BlackjackTrainer = () => {
     return null;
   };
 
-  // Раздать карты и определить, с какой руки начинать (или сразу к дилеру)
+  // Deal the cards and figure out which hand to start with (or go
+  // straight to the dealer)
   const prepareRound = (shoe: PlayingCard[], dealtCardsSoFar: PlayingCard[]) => {
     const deal = buildRoundDeal(shoe, dealtCardsSoFar);
     const firstLocation = findNextPlayingHand(deal.hands, 0, 0);
     return { ...deal, firstLocation };
   };
 
-  // Ход дилера: открыть закрытую карту и добирать по правилам до конца
+  // Dealer's turn: reveal the hole card and draw per the rules until done
   const runDealerTurn = (
     shoe: PlayingCard[],
     dealtCards: PlayingCard[],
@@ -845,7 +848,7 @@ const BlackjackTrainer = () => {
     step(shoe, dealtCards, dealerHand);
   };
 
-  // Инициализация игры — сразу сдаёт первый раунд
+  // Start the game — deals the first round immediately
   const initializeGame = () => {
     const shoe = createDeck();
     const cutPosition = Math.floor(shoe.length - gameSettings.cutCards * 52);
@@ -879,7 +882,7 @@ const BlackjackTrainer = () => {
     }
   };
 
-  // Раздача следующего раунда
+  // Deal the next round
   const dealRound = () => {
     if (gameState.shoe.length < minCardsForRound()) {
       const accuracy =
@@ -918,7 +921,7 @@ const BlackjackTrainer = () => {
     }
   };
 
-  // Передать ход следующей играющей руке либо дилеру
+  // Hand the turn off to the next playing hand, or to the dealer
   const advanceTurn = (
     hands: PlayerHand[][],
     shoe: PlayingCard[],
@@ -939,7 +942,7 @@ const BlackjackTrainer = () => {
     }
   };
 
-  // Игрок берёт карту в текущую руку
+  // Player hits the current hand
   const hit = () => {
     const box = gameState.activeBoxIndex;
     const handIdx = gameState.activeHandIndex;
@@ -970,7 +973,7 @@ const BlackjackTrainer = () => {
     }
   };
 
-  // Игрок останавливается с текущей рукой
+  // Player stands on the current hand
   const stand = () => {
     const box = gameState.activeBoxIndex;
     const handIdx = gameState.activeHandIndex;
@@ -990,7 +993,7 @@ const BlackjackTrainer = () => {
     );
   };
 
-  // Игрок удваивает ставку: одна карта и автоматический стоп
+  // Player doubles down: one card and an automatic stand
   const double = () => {
     const box = gameState.activeBoxIndex;
     const handIdx = gameState.activeHandIndex;
@@ -1023,11 +1026,11 @@ const BlackjackTrainer = () => {
     advanceTurn(newHands, newShoe, newDealtCards, gameState.dealerHand, box, handIdx + 1);
   };
 
-  // Игрок делает сплит: пара делится на две руки, каждая получает по карте.
-  // Если после сплита в одной из новых рук снова пара — её можно сплитовать
-  // ещё раз, вплоть до gameSettings.maxSplitHands рук в боксе.
-  // Исключение — сплит тузов: каждая рука получает ровно одну карту и сразу
-  // останавливается, без добора, удвоения и повторного сплита.
+  // Player splits: the pair becomes two hands, each dealt one card. If a
+  // new hand is a pair again, it can be split once more, up to
+  // gameSettings.maxSplitHands hands in the box.
+  // Exception — splitting Aces: each hand gets exactly one card and stands
+  // immediately, with no further hits, doubling, or resplitting.
   const split = () => {
     const box = gameState.activeBoxIndex;
     const handIdx = gameState.activeHandIndex;
@@ -1046,8 +1049,8 @@ const BlackjackTrainer = () => {
 
     const makeSplitHand = (originalCard: PlayingCard, newCard: PlayingCard): PlayerHand => {
       const cards = [originalCard, newCard];
-      // 21 после сплита — не натуральный блэкджек, просто стоп. Сплит-тузы
-      // всегда останавливаются сразу же, независимо от суммы.
+      // 21 right after a split isn't a natural blackjack, just a stand.
+      // Ace-split hands always stand immediately regardless of total.
       const status: HandStatus =
         isAceSplit || getHandValue(cards) === 21 ? "stood" : "playing";
       return { cards, status, doubled: false, isSplitAce: isAceSplit };
@@ -1073,19 +1076,19 @@ const BlackjackTrainer = () => {
     }
   };
 
-  // Подсчет актуального счета
+  // Calculate the actual count
   const calculateActualCount = (cards: PlayingCard[]): number => {
     return cards.reduce((count, card) => count + getCountValue(card), 0);
   };
 
-  // Проверка ответа игрока
+  // Check the player's answer
   const checkPlayerCount = () => {
     const playerCountNum = parseInt(gameState.playerInput);
     const actualCount = calculateActualCount(gameState.dealtCards);
     const isCorrect = playerCountNum === actualCount;
-    // Считаем заранее и используем локальные константы ниже, а не gameState
-    // из замыкания — к моменту срабатывания setTimeout значения в gameState
-    // уже могли устареть.
+    // Compute these upfront and use the local constants below instead of
+    // reading gameState from the closure — by the time the setTimeout
+    // fires, gameState may already be stale.
     const canDealAnotherRound = gameState.shoe.length >= minCardsForRound();
     const roundsPlayed = gameState.currentRound;
     const finalScore = {
@@ -1101,7 +1104,7 @@ const BlackjackTrainer = () => {
       phase: "result",
     }));
 
-    // Показать результат на 2 секунды
+    // Show the result for 2 seconds
     setTimeout(() => {
       if (!canDealAnotherRound) {
         const accuracy = Math.round(
@@ -1128,7 +1131,7 @@ const BlackjackTrainer = () => {
   return (
     <div className="min-h-screen bg-green-800 text-white p-4">
       <div className="max-w-4xl mx-auto">
-        {/* Заголовок */}
+        {/* Header */}
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold mb-2">Blackjack Trainer</h1>
           <p className="text-green-200 mb-3">{t.appSubtitle}</p>
@@ -1148,7 +1151,7 @@ const BlackjackTrainer = () => {
           </div>
         </div>
 
-        {/* Статистика */}
+        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-green-700 rounded-lg p-3 text-center">
             <div className="text-xl font-bold">{gameState.currentRound}</div>
@@ -1177,7 +1180,7 @@ const BlackjackTrainer = () => {
           </div>
         </div>
 
-        {/* Игровое поле */}
+        {/* Game board */}
         <div className="bg-green-700 rounded-lg p-6 mb-6">
           {!gameState.gameStarted ? (
             <div className="text-center">
@@ -1222,7 +1225,7 @@ const BlackjackTrainer = () => {
             </div>
           ) : (
             <div>
-              {/* Дилер */}
+              {/* Dealer */}
               <div className="mb-6">
                 <h3 className="text-lg font-bold mb-2">{t.dealerLabel}</h3>
                 <div className="flex space-x-2">
@@ -1241,7 +1244,7 @@ const BlackjackTrainer = () => {
                 )}
               </div>
 
-              {/* Игроки */}
+              {/* Players */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 {gameState.hands.map(
                   (boxHands, boxIdx) =>
@@ -1327,7 +1330,7 @@ const BlackjackTrainer = () => {
                 )}
               </div>
 
-              {/* Ввод счета */}
+              {/* Count input */}
               {gameState.phase === "counting" && (
                 <div className="bg-yellow-600 rounded-lg p-4 mb-4">
                   <h3 className="font-bold mb-2">{t.countPrompt}</h3>
@@ -1356,7 +1359,7 @@ const BlackjackTrainer = () => {
                 </div>
               )}
 
-              {/* Результат последнего раунда */}
+              {/* Last round's result */}
               {gameState.phase === "result" && (
                 <div
                   className={`rounded-lg p-4 mb-4 ${
@@ -1379,7 +1382,7 @@ const BlackjackTrainer = () => {
                 </div>
               )}
 
-              {/* Кнопки управления */}
+              {/* Controls */}
               <div className="flex flex-wrap justify-center gap-4">
                 {gameState.phase === "result" && (
                   <button
@@ -1436,7 +1439,7 @@ const BlackjackTrainer = () => {
           )}
         </div>
 
-        {/* Справочная информация */}
+        {/* Reference info */}
         <div className="bg-green-700 rounded-lg p-4">
           <h3 className="font-bold mb-2">{t.referenceTitle}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -1454,7 +1457,7 @@ const BlackjackTrainer = () => {
         </div>
       </div>
 
-      {/* Модальное окно настроек */}
+      {/* Settings modal */}
       {gameState.showSettings && (
         <SettingsPanel
           t={t}
@@ -1471,7 +1474,7 @@ const BlackjackTrainer = () => {
         />
       )}
 
-      {/* Модальное окно истории */}
+      {/* History modal */}
       {gameState.showHistory && (
         <HistoryPanel
           t={t}
@@ -1487,7 +1490,7 @@ const BlackjackTrainer = () => {
         />
       )}
 
-      {/* Модальное окно помощи */}
+      {/* Help modal */}
       {gameState.showHelp && (
         <HelpPanel
           t={t}
@@ -1495,7 +1498,7 @@ const BlackjackTrainer = () => {
         />
       )}
 
-      {/* Уведомления вместо alert() */}
+      {/* Notices instead of alert() */}
       {gameState.notice && (
         <NoticeModal
           message={gameState.notice}
