@@ -5,6 +5,8 @@ import {
   RotateCcw,
   History as HistoryIcon,
   HelpCircle,
+  Menu as MenuIcon,
+  X as CloseIcon,
 } from "lucide-react";
 import {
   type Language,
@@ -82,6 +84,10 @@ interface GameState {
   showSettings: boolean;
   showHistory: boolean;
   showHelp: boolean;
+  // Mobile-only slide-in drawer for the utility buttons (Settings/History/
+  // Help/New Game) during an active game — on larger screens those stay
+  // inline instead, see the controls row in the render.
+  showMenu: boolean;
   hands: PlayerHand[][];
   dealerHand: PlayingCard[];
   dealerHoleHidden: boolean;
@@ -593,6 +599,7 @@ const BlackjackTrainer = () => {
     showSettings: false,
     showHistory: false,
     showHelp: false,
+    showMenu: false,
     hands: [],
     dealerHand: [],
     dealerHoleHidden: true,
@@ -1385,7 +1392,7 @@ const BlackjackTrainer = () => {
               )}
 
               {/* Controls */}
-              <div className="flex flex-wrap justify-center gap-4">
+              <div className="flex flex-wrap justify-center items-center gap-4">
                 {gameState.phase === "result" && (
                   <button
                     onClick={dealRound}
@@ -1396,45 +1403,60 @@ const BlackjackTrainer = () => {
                   </button>
                 )}
 
-                <button
-                  onClick={() =>
-                    setGameState((prev) => ({ ...prev, showSettings: true }))
-                  }
-                  className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
-                >
-                  <Settings size={20} />
-                  <span>{t.btnSettings}</span>
-                </button>
+                {/* Utility buttons (Settings/History/Help/New Game): inline
+                    from the sm breakpoint up; on mobile they move into the
+                    slide-in menu below to keep the in-game view uncluttered. */}
+                <div className="hidden sm:flex flex-wrap justify-center gap-4">
+                  <button
+                    onClick={() =>
+                      setGameState((prev) => ({ ...prev, showSettings: true }))
+                    }
+                    className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
+                  >
+                    <Settings size={20} />
+                    <span>{t.btnSettings}</span>
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      setGameState((prev) => ({ ...prev, showHistory: true }))
+                    }
+                    className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
+                  >
+                    <HistoryIcon size={20} />
+                    <span>{t.btnHistory}</span>
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      setGameState((prev) => ({ ...prev, showHelp: true }))
+                    }
+                    className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
+                  >
+                    <HelpCircle size={20} />
+                    <span>{t.btnHelp}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      recordSession(gameState.currentRound, gameState.score);
+                      window.location.reload();
+                    }}
+                    className="bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 flex items-center space-x-2"
+                  >
+                    <RotateCcw size={20} />
+                    <span>{t.btnNewGame}</span>
+                  </button>
+                </div>
 
                 <button
                   onClick={() =>
-                    setGameState((prev) => ({ ...prev, showHistory: true }))
+                    setGameState((prev) => ({ ...prev, showMenu: true }))
                   }
-                  className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
+                  className="sm:hidden bg-gray-500 text-white p-3 rounded-lg hover:bg-gray-600"
+                  aria-label={t.btnSettings}
                 >
-                  <HistoryIcon size={20} />
-                  <span>{t.btnHistory}</span>
-                </button>
-
-                <button
-                  onClick={() =>
-                    setGameState((prev) => ({ ...prev, showHelp: true }))
-                  }
-                  className="bg-gray-500 text-white px-6 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
-                >
-                  <HelpCircle size={20} />
-                  <span>{t.btnHelp}</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    recordSession(gameState.currentRound, gameState.score);
-                    window.location.reload();
-                  }}
-                  className="bg-red-500 text-white px-6 py-3 rounded-lg hover:bg-red-600 flex items-center space-x-2"
-                >
-                  <RotateCcw size={20} />
-                  <span>{t.btnNewGame}</span>
+                  <MenuIcon size={20} />
                 </button>
               </div>
             </div>
@@ -1498,6 +1520,82 @@ const BlackjackTrainer = () => {
           t={t}
           onClose={() => setGameState((prev) => ({ ...prev, showHelp: false }))}
         />
+      )}
+
+      {/* Mobile-only slide-in menu for the utility buttons during a game */}
+      {gameState.showMenu && (
+        <div className="fixed inset-0 z-50 sm:hidden">
+          <div
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={() =>
+              setGameState((prev) => ({ ...prev, showMenu: false }))
+            }
+          />
+          <div className="absolute right-0 top-0 h-full w-64 max-w-[80vw] bg-green-800 shadow-xl p-4 flex flex-col gap-3">
+            <button
+              onClick={() =>
+                setGameState((prev) => ({ ...prev, showMenu: false }))
+              }
+              className="self-end text-white p-2 hover:bg-green-700 rounded"
+              aria-label={t.close}
+            >
+              <CloseIcon size={22} />
+            </button>
+
+            <button
+              onClick={() =>
+                setGameState((prev) => ({
+                  ...prev,
+                  showMenu: false,
+                  showSettings: true,
+                }))
+              }
+              className="bg-gray-500 text-white px-4 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
+            >
+              <Settings size={20} />
+              <span>{t.btnSettings}</span>
+            </button>
+
+            <button
+              onClick={() =>
+                setGameState((prev) => ({
+                  ...prev,
+                  showMenu: false,
+                  showHistory: true,
+                }))
+              }
+              className="bg-gray-500 text-white px-4 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
+            >
+              <HistoryIcon size={20} />
+              <span>{t.btnHistory}</span>
+            </button>
+
+            <button
+              onClick={() =>
+                setGameState((prev) => ({
+                  ...prev,
+                  showMenu: false,
+                  showHelp: true,
+                }))
+              }
+              className="bg-gray-500 text-white px-4 py-3 rounded-lg hover:bg-gray-600 flex items-center space-x-2"
+            >
+              <HelpCircle size={20} />
+              <span>{t.btnHelp}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                recordSession(gameState.currentRound, gameState.score);
+                window.location.reload();
+              }}
+              className="bg-red-500 text-white px-4 py-3 rounded-lg hover:bg-red-600 flex items-center space-x-2"
+            >
+              <RotateCcw size={20} />
+              <span>{t.btnNewGame}</span>
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Notices instead of alert() */}
