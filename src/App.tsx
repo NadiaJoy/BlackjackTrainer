@@ -1142,7 +1142,13 @@ const BlackjackTrainer = () => {
         <div className="text-center mb-6">
           <h1 className="text-3xl font-bold mb-2">Blackjack Trainer</h1>
           <p className="text-green-200 mb-3">{t.appSubtitle}</p>
-          <div className="flex justify-center gap-2">
+          {/* On mobile, once a game is running, the language switch moves into
+              the slide-in menu below instead of sitting in the header. */}
+          <div
+            className={`justify-center gap-2 ${
+              gameState.gameStarted ? "hidden sm:flex" : "flex"
+            }`}
+          >
             <button
               onClick={() => switchLanguage("ru")}
               className={langButtonClass(language === "ru")}
@@ -1158,34 +1164,54 @@ const BlackjackTrainer = () => {
           </div>
         </div>
 
-        {/* Stats — only shown once a game is in progress */}
+        {/* Stats — only shown once a game is in progress. Kept to a single
+            row (4 narrow tiles) even on mobile; the hamburger menu lives
+            here too so it doesn't take extra space in the controls below. */}
         {gameState.gameStarted && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-green-700 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold">{gameState.currentRound}</div>
-              <div className="text-xs">{t.statRound}</div>
-            </div>
-            <div className="bg-green-700 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold">
-                {gameState.score.total > 0
-                  ? Math.round(
-                      (gameState.score.correct / gameState.score.total) * 100
-                    )
-                  : 0}
-                %
+          <div className="flex items-center gap-2 mb-6">
+            <div className="grid grid-cols-4 gap-1.5 sm:gap-4 flex-1">
+              <div className="bg-green-700 rounded-lg p-1.5 sm:p-3 text-center">
+                <div className="text-sm sm:text-xl font-bold">
+                  {gameState.currentRound}
+                </div>
+                <div className="text-[10px] sm:text-xs">{t.statRound}</div>
               </div>
-              <div className="text-xs">{t.statAccuracy}</div>
-            </div>
-            <div className="bg-green-700 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold">{gameState.shoe.length}</div>
-              <div className="text-xs">{t.statCardsLeft}</div>
-            </div>
-            <div className="bg-green-700 rounded-lg p-3 text-center">
-              <div className="text-xl font-bold">
-                {gameSettings.countingSystem.toUpperCase()}
+              <div className="bg-green-700 rounded-lg p-1.5 sm:p-3 text-center">
+                <div className="text-sm sm:text-xl font-bold">
+                  {gameState.score.total > 0
+                    ? Math.round(
+                        (gameState.score.correct / gameState.score.total) *
+                          100
+                      )
+                    : 0}
+                  %
+                </div>
+                <div className="text-[10px] sm:text-xs">{t.statAccuracy}</div>
               </div>
-              <div className="text-xs">{t.statSystem}</div>
+              <div className="bg-green-700 rounded-lg p-1.5 sm:p-3 text-center">
+                <div className="text-sm sm:text-xl font-bold">
+                  {gameState.shoe.length}
+                </div>
+                <div className="text-[10px] sm:text-xs">
+                  {t.statCardsLeft}
+                </div>
+              </div>
+              <div className="bg-green-700 rounded-lg p-1.5 sm:p-3 text-center">
+                <div className="text-sm sm:text-xl font-bold">
+                  {gameSettings.countingSystem.toUpperCase()}
+                </div>
+                <div className="text-[10px] sm:text-xs">{t.statSystem}</div>
+              </div>
             </div>
+            <button
+              onClick={() =>
+                setGameState((prev) => ({ ...prev, showMenu: true }))
+              }
+              className="sm:hidden shrink-0 bg-gray-500 text-white p-2 rounded-lg hover:bg-gray-600"
+              aria-label={t.btnSettings}
+            >
+              <MenuIcon size={18} />
+            </button>
           </div>
         )}
 
@@ -1448,16 +1474,6 @@ const BlackjackTrainer = () => {
                     <span>{t.btnNewGame}</span>
                   </button>
                 </div>
-
-                <button
-                  onClick={() =>
-                    setGameState((prev) => ({ ...prev, showMenu: true }))
-                  }
-                  className="sm:hidden bg-gray-500 text-white p-3 rounded-lg hover:bg-gray-600"
-                  aria-label={t.btnSettings}
-                >
-                  <MenuIcon size={20} />
-                </button>
               </div>
             </div>
           )}
@@ -1541,6 +1557,21 @@ const BlackjackTrainer = () => {
             >
               <CloseIcon size={22} />
             </button>
+
+            <div className="flex justify-center gap-2 mb-2">
+              <button
+                onClick={() => switchLanguage("ru")}
+                className={langButtonClass(language === "ru")}
+              >
+                RU
+              </button>
+              <button
+                onClick={() => switchLanguage("en")}
+                className={langButtonClass(language === "en")}
+              >
+                EN
+              </button>
+            </div>
 
             <button
               onClick={() =>
