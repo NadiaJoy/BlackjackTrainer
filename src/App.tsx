@@ -1151,34 +1151,36 @@ const BlackjackTrainer = () => {
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-green-700 rounded-lg p-3 text-center">
-            <div className="text-xl font-bold">{gameState.currentRound}</div>
-            <div className="text-xs">{t.statRound}</div>
-          </div>
-          <div className="bg-green-700 rounded-lg p-3 text-center">
-            <div className="text-xl font-bold">
-              {gameState.score.total > 0
-                ? Math.round(
-                    (gameState.score.correct / gameState.score.total) * 100
-                  )
-                : 0}
-              %
+        {/* Stats — only shown once a game is in progress */}
+        {gameState.gameStarted && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-green-700 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold">{gameState.currentRound}</div>
+              <div className="text-xs">{t.statRound}</div>
             </div>
-            <div className="text-xs">{t.statAccuracy}</div>
-          </div>
-          <div className="bg-green-700 rounded-lg p-3 text-center">
-            <div className="text-xl font-bold">{gameState.shoe.length}</div>
-            <div className="text-xs">{t.statCardsLeft}</div>
-          </div>
-          <div className="bg-green-700 rounded-lg p-3 text-center">
-            <div className="text-xl font-bold">
-              {gameSettings.countingSystem.toUpperCase()}
+            <div className="bg-green-700 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold">
+                {gameState.score.total > 0
+                  ? Math.round(
+                      (gameState.score.correct / gameState.score.total) * 100
+                    )
+                  : 0}
+                %
+              </div>
+              <div className="text-xs">{t.statAccuracy}</div>
             </div>
-            <div className="text-xs">{t.statSystem}</div>
+            <div className="bg-green-700 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold">{gameState.shoe.length}</div>
+              <div className="text-xs">{t.statCardsLeft}</div>
+            </div>
+            <div className="bg-green-700 rounded-lg p-3 text-center">
+              <div className="text-xl font-bold">
+                {gameSettings.countingSystem.toUpperCase()}
+              </div>
+              <div className="text-xs">{t.statSystem}</div>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Game board */}
         <div className="bg-green-700 rounded-lg p-6 mb-6">
