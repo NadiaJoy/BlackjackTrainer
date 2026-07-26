@@ -24,6 +24,9 @@ export interface Strings {
   sumLabel: string;
   boxLabel: string;
   handLabel: string;
+  btnShowCount: string;
+  btnHideCount: string;
+  currentCountLabel: string;
 
   statusStood: string;
   statusBust: string;
@@ -119,6 +122,9 @@ export const STRINGS: Record<Language, Strings> = {
     sumLabel: "Сумма",
     boxLabel: "Бокс",
     handLabel: "Рука",
+    btnShowCount: "Показать счёт",
+    btnHideCount: "Скрыть счёт",
+    currentCountLabel: "Текущий счёт",
 
     statusStood: "Стоп",
     statusBust: "Перебор",
@@ -237,6 +243,9 @@ export const STRINGS: Record<Language, Strings> = {
     sumLabel: "Total",
     boxLabel: "Box",
     handLabel: "Hand",
+    btnShowCount: "Show count",
+    btnHideCount: "Hide count",
+    currentCountLabel: "Current count",
 
     statusStood: "Stand",
     statusBust: "Bust",

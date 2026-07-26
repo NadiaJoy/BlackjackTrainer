@@ -88,6 +88,7 @@ const BlackjackTrainer = () => {
     showHistory: false,
     showHelp: false,
     showMenu: false,
+    showCount: false,
     hands: [],
     dealerHand: [],
     dealerHoleHidden: true,
@@ -197,6 +198,7 @@ const BlackjackTrainer = () => {
       dealerHand,
       dealerHoleHidden: true,
       score: { correct: 0, total: 0 },
+      showCount: false,
     }));
 
     if (firstLocation === null) {
@@ -237,6 +239,7 @@ const BlackjackTrainer = () => {
       activeHandIndex: firstLocation?.hand ?? null,
       playerInput: "",
       currentRound: prev.currentRound + 1,
+      showCount: false,
     }));
 
     if (firstLocation === null) {
@@ -558,7 +561,31 @@ const BlackjackTrainer = () => {
             <div>
               {/* Dealer */}
               <div className="mb-6">
-                <h3 className="text-lg font-bold mb-2">{t.dealerLabel}</h3>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-lg font-bold">{t.dealerLabel}</h3>
+                  <div className="flex items-center gap-2">
+                    {gameState.showCount && (
+                      <span className="text-sm bg-green-900 px-2 py-1 rounded">
+                        {t.currentCountLabel}:{" "}
+                        {calculateActualCount(
+                          gameState.dealtCards,
+                          gameSettings.countingSystem
+                        )}
+                      </span>
+                    )}
+                    <button
+                      onClick={() =>
+                        setGameState((prev) => ({
+                          ...prev,
+                          showCount: !prev.showCount,
+                        }))
+                      }
+                      className="bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600"
+                    >
+                      {gameState.showCount ? t.btnHideCount : t.btnShowCount}
+                    </button>
+                  </div>
+                </div>
                 <div className="flex space-x-2">
                   {gameState.dealerHand.map((card, idx) => (
                     <Card

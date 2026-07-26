@@ -73,6 +73,23 @@ describe("settings", () => {
   });
 });
 
+describe("revealing the running count", () => {
+  it("is hidden by default and toggles on request", async () => {
+    render(<BlackjackTrainer />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Начать игру" }));
+
+    expect(screen.queryByText(/Текущий счёт/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Показать счёт" }));
+    expect(screen.getByText(/Текущий счёт/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Скрыть счёт" }));
+    expect(screen.queryByText(/Текущий счёт/)).not.toBeInTheDocument();
+  });
+});
+
 describe("history", () => {
   it("shows the empty state before any shoe has been completed", async () => {
     render(<BlackjackTrainer />);

@@ -75,6 +75,9 @@ export interface GameState {
   // Help/New Game) during an active game — on larger screens those stay
   // inline instead, see the controls row in the render.
   showMenu: boolean;
+  // Player-requested reveal of the real running count, shown next to the
+  // dealer. Hidden again at the start of every new round.
+  showCount: boolean;
   hands: PlayerHand[][];
   dealerHand: PlayingCard[];
   dealerHoleHidden: boolean;
