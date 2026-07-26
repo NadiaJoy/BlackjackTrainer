@@ -9,6 +9,7 @@ import {
   createDeck,
   findNextPlayingHand,
   getCardValue,
+  getCountValue,
   getHandInfo,
   getHandValue,
   isNaturalBlackjack,
@@ -205,6 +206,12 @@ describe("calculateActualCount", () => {
     const cards = [card("2"), card("6"), card("10"), card("A")];
     // 2,6 -> +1 each, 10,A -> -1 each => 0
     expect(calculateActualCount(cards, "high-low")).toBe(0);
+  });
+
+  it("gives neutral cards (7, 8, 9) a High-Low value of 0", () => {
+    expect(getCountValue(card("7"), "high-low")).toBe(0);
+    expect(getCountValue(card("8"), "high-low")).toBe(0);
+    expect(getCountValue(card("9"), "high-low")).toBe(0);
   });
 
   it("sums Omega II values", () => {
